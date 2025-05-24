@@ -18,8 +18,8 @@ android {
         applicationId = "me.rerere.rikkahub"
         minSdk = 26
         targetSdk = 36
-        versionCode = 32
-        versionName = "0.7.7"
+        versionCode = 43
+        versionName = "0.7.17"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -36,6 +36,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -138,6 +139,8 @@ dependencies {
 
     // quickie (qrcode scanner)
     implementation(libs.quickie.bundled)
+    implementation(libs.barcode.scanning)
+    implementation(libs.androidx.camera.core)
 
     // Room
     implementation(libs.androidx.room.runtime)
@@ -169,6 +172,12 @@ dependencies {
 
     // image viewer
     implementation(libs.image.viewer)
+
+    // JLatexMath
+    // https://github.com/rikkahub/jlatexmath-android
+    implementation(libs.jlatexmath)
+    implementation(libs.jlatexmath.font.greek)
+    implementation(libs.jlatexmath.font.cyrillic)
 
     // modules
     implementation(project(":ai"))

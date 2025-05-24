@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.objectbox)
 }
 
 android {
@@ -33,6 +34,5 @@ android {
 }
 
 dependencies {
-    api(libs.requery.sqlite.android)
     implementation(libs.jsoup)
 }

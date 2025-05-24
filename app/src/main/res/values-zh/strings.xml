@@ -36,6 +36,7 @@
     <string name="chat_page_new_chat">新聊天</string>
     <string name="chat_page_edit_title_warning">请先聊天再编辑标题吧</string>
     <string name="chat_page_search_placeholder">搜索聊天记录</string>
+    <string name="chat_page_clear_context">清空上下文</string>
 
     <!-- Export Chat -->
     <string name="chat_page_export_format">导出格式</string>
@@ -92,7 +93,7 @@
     <string name="assistant_page_add">添加</string>
     <string name="assistant_page_name">助手名称</string>
     <string name="assistant_page_system_prompt">系统提示词</string>
-    <string name="assistant_page_available_variables">可用变量: %s</string>
+    <string name="assistant_page_available_variables">"可用变量: "</string>
     <string name="assistant_page_temperature">温度</string>
     <string name="assistant_page_strict">严谨</string>
     <string name="assistant_page_balanced">平衡</string>
@@ -117,6 +118,11 @@
     <string name="assistant_page_top_p_value">Top P: %s</string>
     <string name="assistant_page_inject_message_time">注入消息时间</string>
     <string name="assistant_page_inject_message_time_desc">是否把每条消息的发送时间注入到上下文中，以便模型理解消息发送时间，注意开启会消耗更多token</string>
+    <string name="assistant_page_thinking_budget">思考预算</string>
+    <string name="assistant_page_thinking_budget_desc">模型应该生成的思考内容的token数量。0表示将禁用思考，留空表示使用模型的默认值。</string>
+    <string name="assistant_page_thinking_budget_tokens">%s token</string>
+    <string name="assistant_page_thinking_budget_default">默认</string>
+    <string name="assistant_page_thinking_budget_warning">注意，由于不同提供商定义了各种不同的思考预算API格式，APP无法考虑到，因此这个选项不一定起作用，如果不起作用，推荐使用下面的自定义body来自定义请求</string>
     
     <!-- Custom Headers and Bodies -->
     <string name="assistant_page_custom_headers">自定义 Headers</string>
@@ -177,5 +183,21 @@
     <string name="setting_display_page_show_token_usage_desc">在对话底部显示Token消耗</string>
     <string name="setting_display_page_auto_collapse_thinking_title">自动折叠思考</string>
     <string name="setting_display_page_auto_collapse_thinking_desc">思考完成自动折叠思考内容</string>
+    <string name="setting_display_page_show_updates_title">显示更新</string>
+    <string name="setting_display_page_show_updates_desc">是否显示应用更新通知</string>
     <string name="setting_display_page_title">显示设置</string>
+    
+    <!-- Color Mode -->
+    <string name="setting_page_color_mode">颜色模式</string>
+    <string name="setting_page_color_mode_system">跟随系统</string>
+    <string name="setting_page_color_mode_light">浅色</string>
+    <string name="setting_page_color_mode_dark">深色</string>
+
+    <!-- Assistant Detail Page -->
+    <string name="assistant_page_tab_basic">基础设定</string>
+    <string name="assistant_page_tab_prompt">提示词</string>
+    <string name="assistant_page_tab_memory">记忆</string>
+    <string name="assistant_page_tab_request">自定义请求</string>
+    <string name="assistant_page_stream_output">流式输出</string>
+    <string name="assistant_page_stream_output_desc">是否启用消息的流式输出</string>
 </resources> 

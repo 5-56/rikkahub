@@ -3,14 +3,19 @@ package me.rerere.rikkahub.ui.pages.debug
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -20,6 +25,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dokar.sonner.ToastType
 import kotlinx.coroutines.launch
 import me.rerere.rikkahub.ui.components.nav.BackButton
+import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
+import me.rerere.rikkahub.ui.components.richtext.MathBlock
 import me.rerere.rikkahub.ui.components.richtext.Mermaid
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.search.SearchService
@@ -46,7 +53,9 @@ fun DebugPage(vm: DebugVM = koinViewModel()) {
         Column(
             modifier = Modifier
                 .padding(contentPadding)
-                .padding(8.dp),
+                .padding(8.dp)
+                .verticalScroll(rememberScrollState())
+                .imePadding(),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Mermaid(
@@ -127,6 +136,15 @@ fun DebugPage(vm: DebugVM = koinViewModel()) {
             ) {
                 Text("测试搜索")
             }
+
+            var markdown by remember { mutableStateOf("") }
+            MarkdownBlock(markdown,  modifier = Modifier.fillMaxWidth())
+            MathBlock(markdown)
+            OutlinedTextField(
+                value = markdown,
+                onValueChange = { markdown = it },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

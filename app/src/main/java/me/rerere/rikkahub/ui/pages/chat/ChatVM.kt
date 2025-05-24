@@ -30,6 +30,7 @@ import me.rerere.ai.ui.transformers.MessageTimeTransformer
 import me.rerere.ai.ui.transformers.PlaceholderTransformer
 import me.rerere.ai.ui.transformers.SearchTextTransformer
 import me.rerere.ai.ui.transformers.ThinkTagTransformer
+import me.rerere.rikkahub.data.ai.Base64ImageToLocalFileTransformer
 import me.rerere.rikkahub.data.ai.GenerationChunk
 import me.rerere.rikkahub.data.ai.GenerationHandler
 import me.rerere.rikkahub.data.datastore.Settings
@@ -61,6 +62,7 @@ private val inputTransformers by lazy {
 private val outputTransformers by lazy {
     listOf(
         ThinkTagTransformer,
+        Base64ImageToLocalFileTransformer,
     )
 }
 
@@ -147,7 +149,7 @@ class ChatVM(
 
     // Update checker
     val updateState = updateChecker.checkUpdate()
-        .stateIn(viewModelScope, SharingStarted.Lazily, UiState.Loading)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, UiState.Loading)
 
     fun handleMessageSend(content: List<UIMessagePart>) {
         if (content.isEmptyInputMessage()) return
@@ -230,7 +232,7 @@ class ChatVM(
 //                assistant = settings.value.getCurrentAssistant(),
 //                conversation = conversation.value
 //            )
-            generationHandler.streamText(
+            generationHandler.generateText(
                 settings = settings.value,
                 model = model,
                 messages = conversation.value.messages,
@@ -259,7 +261,7 @@ class ChatVM(
                     }
 
                     is GenerationChunk.TokenUsage -> {
-                        saveConversation(conversation.value.copy(tokenUsage = chunk.usage))
+                        updateConversation(conversation.value.copy(tokenUsage = chunk.usage))
                         Log.i(TAG, "handleMessageComplete: usage = ${chunk.usage}")
                     }
                 }
@@ -413,6 +415,12 @@ class ChatVM(
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    fun saveConversationAsync() {
+        viewModelScope.launch {
+            saveConversation(conversation.value)
         }
     }
 

@@ -200,6 +200,10 @@ fun ChatPage(id: Uuid, vm: ChatVM = koinViewModel()) {
                                 providers = it
                             )
                         )
+                    },
+                    onClearContext = {
+                        vm.updateConversation(conversation.copy(messages = emptyList()))
+                        vm.saveConversationAsync()
                     }
                 )
             }
@@ -650,7 +654,9 @@ private fun DrawerContent(
             modifier = Modifier.padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            UpdateCard(vm)
+            if(settings.displaySetting.showUpdates) {
+                UpdateCard(vm)
+            }
             ConversationList(
                 current = current,
                 conversations = conversations,

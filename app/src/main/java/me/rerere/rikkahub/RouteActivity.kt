@@ -23,6 +23,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
@@ -53,12 +54,14 @@ import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.rikkahub.ui.context.LocalSharedTransitionScope
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.pages.assistant.AssistantPage
+import me.rerere.rikkahub.ui.pages.assistant.detail.AssistantDetailPage
 import me.rerere.rikkahub.ui.pages.chat.ChatPage
 import me.rerere.rikkahub.ui.pages.debug.DebugPage
 import me.rerere.rikkahub.ui.pages.history.HistoryPage
 import me.rerere.rikkahub.ui.pages.menu.MenuPage
 import me.rerere.rikkahub.ui.pages.setting.SettingAboutPage
 import me.rerere.rikkahub.ui.pages.setting.SettingDisplayPage
+import me.rerere.rikkahub.ui.pages.setting.SettingMcpPage
 import me.rerere.rikkahub.ui.pages.setting.SettingModelPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPage
 import me.rerere.rikkahub.ui.pages.setting.SettingProviderPage
@@ -137,12 +140,15 @@ class RouteActivity : ComponentActivity() {
                     exitTransition = {
                         fadeOut(animationSpec = tween(300))
                     },
-                    popEnterTransition = {
-                        fadeIn(animationSpec = tween(300))
-                    },
                     popExitTransition = {
-                        scaleOut(targetScale = 0.35f) + fadeOut(animationSpec = tween(300))
-                    }
+                        scaleOut(
+                            targetScale = 0.9f,
+                            transformOrigin = TransformOrigin(pivotFractionX = 0.5f, pivotFractionY = 0.5f)
+                        )
+                    },
+                    popEnterTransition = {
+                        EnterTransition.None
+                    },
                 ) {
                     composableHelper(
                         route = "chat/{id}",
@@ -163,6 +169,17 @@ class RouteActivity : ComponentActivity() {
 
                     composableHelper("assistant") {
                         AssistantPage()
+                    }
+
+                    composableHelper(
+                        route = "assistant/{id}",
+                        args = listOf(
+                            navArgument("id") {
+                                type = NavType.StringType
+                            }
+                        ),
+                    ) {
+                        AssistantDetailPage()
                     }
 
                     composableHelper("menu") {
@@ -213,6 +230,10 @@ class RouteActivity : ComponentActivity() {
 
                     composableHelper("setting/search") {
                         SettingSearchPage()
+                    }
+
+                    composableHelper("setting/mcp") {
+                        SettingMcpPage()
                     }
 
                     composableHelper("debug") {

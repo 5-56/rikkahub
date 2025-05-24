@@ -35,6 +35,7 @@
     <string name="chat_page_new_chat">New Chat</string>
     <string name="chat_page_edit_title_warning">Please chat first before editing the title</string>
     <string name="chat_page_search_placeholder">Search conversations</string>
+    <string name="chat_page_clear_context">Clear Context</string>
 
     <!-- Export Chat -->
     <string name="chat_page_export_format">Export Format</string>
@@ -91,7 +92,7 @@
     <string name="assistant_page_add">Add</string>
     <string name="assistant_page_name">Assistant Name</string>
     <string name="assistant_page_system_prompt">System Prompt</string>
-    <string name="assistant_page_available_variables">Available variables: %s</string>
+    <string name="assistant_page_available_variables">"Available variables: "</string>
     <string name="assistant_page_temperature">Temperature</string>
     <string name="assistant_page_strict">Strict</string>
     <string name="assistant_page_balanced">Balanced</string>
@@ -116,6 +117,11 @@
     <string name="assistant_page_top_p_value">Top P: %s</string>
     <string name="assistant_page_inject_message_time">Inject Message Time</string>
     <string name="assistant_page_inject_message_time_desc">Whether to inject the message sending time into the context to help the model understand when each message was sent. Note that enabling this will consume more tokens</string>
+    <string name="assistant_page_thinking_budget">Thinking Budget</string>
+    <string name="assistant_page_thinking_budget_desc">The number of thoughts tokens that the model should generate. 0 means thinking will be disabled, and blank means using the default value of the model.</string>
+    <string name="assistant_page_thinking_budget_tokens">%s tokens</string>
+    <string name="assistant_page_thinking_budget_default">Default</string>
+    <string name="assistant_page_thinking_budget_warning">Note: Different providers define various thinking budget API formats that the APP cannot accommodate for all, so this option may not work. If it doesn\'t work, we recommend using the custom body below to customize your request.</string>
     
     <!-- Custom Headers and Bodies -->
     <string name="assistant_page_custom_headers">Custom Headers</string>
@@ -176,5 +182,21 @@
     <string name="setting_display_page_show_token_usage_desc">Display token usage at the bottom of the conversation</string>
     <string name="setting_display_page_auto_collapse_thinking_title">Auto Collapse Thinking</string>
     <string name="setting_display_page_auto_collapse_thinking_desc">Automatically collapse thinking content after thinking is complete</string>
+    <string name="setting_display_page_show_updates_title">Show Updates</string>
+    <string name="setting_display_page_show_updates_desc">Whether to display app update notifications</string>
     <string name="setting_display_page_title">Display Settings</string>
+    
+    <!-- Color Mode -->
+    <string name="setting_page_color_mode">Color Mode</string>
+    <string name="setting_page_color_mode_system">System</string>
+    <string name="setting_page_color_mode_light">Light</string>
+    <string name="setting_page_color_mode_dark">Dark</string>
+
+    <!-- Assistant Detail Page -->
+    <string name="assistant_page_tab_basic">Basic Settings</string>
+    <string name="assistant_page_tab_prompt">Prompts</string>
+    <string name="assistant_page_tab_memory">Memory</string>
+    <string name="assistant_page_tab_request">Custom Request</string>
+    <string name="assistant_page_stream_output">Stream Output</string>
+    <string name="assistant_page_stream_output_desc">Whether to enable streaming output for messages</string>
 </resources>

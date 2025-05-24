@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
@@ -28,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
@@ -46,13 +46,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEach
 import androidx.core.net.toUri
-import coil3.compose.AsyncImage
 import me.rerere.rikkahub.ui.components.table.ColumnDefinition
 import me.rerere.rikkahub.ui.components.table.ColumnWidth
 import me.rerere.rikkahub.ui.components.table.DataTable
@@ -425,7 +425,7 @@ fun MarkdownNode(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // 这里可以使用Coil等图片加载库加载图片
-                AsyncImage(model = imageUrl, contentDescription = altText)
+                ZoomableAsyncImage(model = imageUrl, contentDescription = altText)
             }
         }
 
@@ -521,32 +521,47 @@ private fun Paragraph(
     modifier: Modifier,
 ) {
     // dumpAst(node, content)
+    if (node.findChildOfType(MarkdownElementTypes.IMAGE) != null) {
+        Column(modifier = modifier) {
+            node.children.fastForEach { child ->
+                MarkdownNode(
+                    node = child,
+                    content = content,
+                    onClickCitation = onClickCitation
+                )
+            }
+        }
+        return
+    }
 
     val colorScheme = MaterialTheme.colorScheme
     val inlineContents = remember {
         mutableStateMapOf<String, InlineTextContent>()
     }
 
-    BoxWithConstraints {
+    val textStyle = LocalTextStyle.current
+    val density = LocalDensity.current
+    BoxWithConstraints(modifier = Modifier.padding(start = 4.dp)) {
         val maxWidth = this.maxWidth
         val annotatedString = remember(content) {
             buildAnnotatedString {
                 node.children.fastForEach { child ->
                     appendMarkdownNodeContent(
-                        child,
-                        content,
-                        inlineContents,
-                        colorScheme,
-                        maxWidth,
-                        onClickCitation
+                        node = child,
+                        content = content,
+                        inlineContents = inlineContents,
+                        colorScheme = colorScheme,
+                        maxWidth = maxWidth,
+                        onClickCitation = onClickCitation,
+                        style = textStyle,
+                        density = density
                     )
                 }
             }
         }
         Text(
             text = annotatedString,
-            modifier = modifier
-                .padding(start = 4.dp),
+            modifier = modifier,
             style = LocalTextStyle.current,
             inlineContent = inlineContents,
             softWrap = true,
@@ -617,6 +632,8 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
     inlineContents: MutableMap<String, InlineTextContent>,
     colorScheme: ColorScheme,
     maxWidth: Dp,
+    density: Density,
+    style: TextStyle,
     onClickCitation: (Int) -> Unit
 ) {
     when {
@@ -630,12 +647,14 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
                     .trim(MarkdownTokenTypes.EMPH, 1)
                     .fastForEach {
                         appendMarkdownNodeContent(
-                            it,
-                            content,
-                            inlineContents,
-                            colorScheme,
-                            maxWidth,
-                            onClickCitation
+                            node = it,
+                            content = content,
+                            inlineContents = inlineContents,
+                            colorScheme = colorScheme,
+                            maxWidth = maxWidth,
+                            density = density,
+                            style = style,
+                            onClickCitation = onClickCitation
                         )
                     }
             }
@@ -647,12 +666,14 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
                     .trim(MarkdownTokenTypes.EMPH, 2)
                     .fastForEach {
                         appendMarkdownNodeContent(
-                            it,
-                            content,
-                            inlineContents,
-                            colorScheme,
-                            maxWidth,
-                            onClickCitation
+                            node = it,
+                            content = content,
+                            inlineContents = inlineContents,
+                            colorScheme = colorScheme,
+                            maxWidth = maxWidth,
+                            density = density,
+                            style = style,
+                            onClickCitation = onClickCitation
                         )
                     }
             }
@@ -664,12 +685,14 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
                     .trim(GFMTokenTypes.TILDE, 2)
                     .fastForEach {
                         appendMarkdownNodeContent(
-                            it,
-                            content,
-                            inlineContents,
-                            colorScheme,
-                            maxWidth,
-                            onClickCitation
+                            node = it,
+                            content = content,
+                            inlineContents = inlineContents,
+                            colorScheme = colorScheme,
+                            maxWidth = maxWidth,
+                            density = density,
+                            style = style,
+                            onClickCitation = onClickCitation
                         )
                     }
             }
@@ -745,37 +768,25 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
             // formula as id
             val formula = node.getTextInNode(content)
             appendInlineContent(formula, "[Latex]")
+            val (width, height) = with(density) {
+                assumeLatexSize(
+                    latex = formula,
+                    fontSize = style.fontSize.toPx()
+                ).let {
+                    it.width().toSp() to it.height().toSp()
+                }
+            }
             inlineContents.putIfAbsent(
                 formula, InlineTextContent(
                     placeholder = Placeholder(
-                        width = 1.em,
-                        height = 1.em,
+                        width = width,
+                        height = height,
                         placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
                     ),
                     children = {
-                        val density = LocalDensity.current
                         MathInline(
-                            formula,
+                            latex = formula,
                             modifier = Modifier
-                                .onGloballyPositioned { coord ->
-                                    val width = coord.size.width
-                                    val height = coord.size.height
-                                    with(density) {
-                                        val widthInSp = width.toDp().toSp()
-                                        val heightInSp = (height.toDp() + 4.dp).toSp()
-                                        val inlineContent = inlineContents[formula]
-                                        if (inlineContent != null && inlineContent.placeholder.width != widthInSp) {
-                                            inlineContents[formula] = InlineTextContent(
-                                                placeholder = Placeholder(
-                                                    width = widthInSp,
-                                                    height = heightInSp,
-                                                    placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
-                                                ),
-                                                children = inlineContent.children
-                                            )
-                                        }
-                                    }
-                                }
                         )
                     }
                 ))
@@ -785,37 +796,27 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
             // formula as id
             val formula = node.getTextInNode(content)
             appendInlineContent(formula, "[Latex]")
+            val (width, height) = with(density) {
+                assumeLatexSize(
+                    latex = formula,
+                    fontSize = style.fontSize.toPx()
+                ).let {
+                    maxWidth.toSp() to it.height().toSp() * 1.2
+                }
+            }
             inlineContents.putIfAbsent(
                 formula, InlineTextContent(
                     placeholder = Placeholder(
-                        width = 1.em,
-                        height = 1.em,
+                        width = width,
+                        height = height,
                         placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
                     ),
                     children = {
-                        val density = LocalDensity.current
                         MathBlock(
-                            formula,
+                            latex = formula,
                             modifier = Modifier
                                 .width(maxWidth)
-                                .onGloballyPositioned { coord ->
-                                    val height = coord.size.height
-                                    with(density) {
-                                        val widthInSp = maxWidth.toSp()
-                                        val heightInSp = (height.toDp() + 24.dp).toSp()
-                                        val inlineContent = inlineContents[formula]
-                                        if (inlineContent != null && inlineContent.placeholder.width != widthInSp) {
-                                            inlineContents[formula] = InlineTextContent(
-                                                placeholder = Placeholder(
-                                                    width = widthInSp,
-                                                    height = heightInSp,
-                                                    placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
-                                                ),
-                                                children = inlineContent.children
-                                            )
-                                        }
-                                    }
-                                }
+                                .height(with(density) { height.toDp() })
                         )
                     }
                 ))
@@ -825,12 +826,14 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
         else -> {
             node.children.fastForEach {
                 appendMarkdownNodeContent(
-                    it,
-                    content,
-                    inlineContents,
-                    colorScheme,
-                    maxWidth,
-                    onClickCitation
+                    node = it,
+                    content = content,
+                    inlineContents = inlineContents,
+                    colorScheme = colorScheme,
+                    maxWidth = maxWidth,
+                    density = density,
+                    style = style,
+                    onClickCitation = onClickCitation
                 )
             }
         }

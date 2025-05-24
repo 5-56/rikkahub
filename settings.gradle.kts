@@ -10,12 +10,20 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == "io.objectbox") {
+                useModule("io.objectbox:objectbox-gradle-plugin:${requested.version}")
+            }
+        }
+    }
 }
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
+        mavenLocal()
         maven("https://jitpack.io")
     }
 }
@@ -26,3 +34,4 @@ include(":highlight")
 include(":ai")
 include(":search")
 include(":rag")
+include(":mcp")

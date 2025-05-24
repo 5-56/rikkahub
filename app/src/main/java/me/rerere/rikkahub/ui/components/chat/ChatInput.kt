@@ -31,6 +31,9 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BasicAlertDialog
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -45,6 +48,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.SaverScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,7 +71,9 @@ import androidx.core.net.toUri
 import coil3.compose.AsyncImage
 import com.composables.icons.lucide.ArrowUp
 import com.composables.icons.lucide.Camera
-import com.composables.icons.lucide.Compass
+import com.composables.icons.lucide.Earth
+import com.composables.icons.lucide.Ellipsis
+import com.composables.icons.lucide.Eraser
 import com.composables.icons.lucide.Fullscreen
 import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.Lucide
@@ -73,6 +81,13 @@ import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.X
 import com.meticha.permissions_compose.AppPermission
 import com.meticha.permissions_compose.rememberAppPermissionState
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ModelType
 import me.rerere.ai.provider.ProviderSetting
@@ -80,11 +95,14 @@ import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.isEmptyInputMessage
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
-import me.rerere.rikkahub.utils.createChatFiles
+import me.rerere.rikkahub.ui.components.ui.KeepScreenOn
+import me.rerere.rikkahub.utils.JsonInstant
+import me.rerere.rikkahub.utils.createChatFilesByContents
 import me.rerere.rikkahub.utils.deleteChatFiles
 import java.io.File
 import kotlin.uuid.Uuid
 
+@Serializable
 class ChatInputState {
     var messageContent by mutableStateOf(listOf<UIMessagePart>())
     var editingMessage by mutableStateOf<Uuid?>(null)
@@ -125,12 +143,36 @@ class ChatInputState {
     }
 }
 
+object ChatInputStateSaver : Saver<ChatInputState, String> {
+    override fun restore(value: String): ChatInputState? {
+        val jsonObject = JsonInstant.parseToJsonElement(value).jsonObject
+        val messageContent = jsonObject["messageContent"]?.let {
+            JsonInstant.decodeFromJsonElement<List<UIMessagePart>>(it)
+        }
+        val editingMessage = jsonObject["editingMessage"]?.jsonPrimitive?.contentOrNull?.let {
+            Uuid.parse(it)
+        }
+        val state = ChatInputState()
+        state.messageContent = messageContent ?: emptyList()
+        state.editingMessage = editingMessage
+        return state
+    }
+
+    override fun SaverScope.save(value: ChatInputState): String? {
+        return JsonInstant.encodeToString(buildJsonObject {
+            put("messageContent", JsonInstant.encodeToJsonElement(value.messageContent))
+            put("editingMessage", JsonInstant.encodeToJsonElement(value.editingMessage))
+        })
+    }
+}
+
+
 @Composable
 fun rememberChatInputState(
     message: List<UIMessagePart> = emptyList(),
     loading: Boolean = false,
 ): ChatInputState {
-    return remember(message, loading) {
+    return rememberSaveable(message, loading, saver = ChatInputStateSaver) {
         ChatInputState().apply {
             this.messageContent = message
             this.loading = loading
@@ -152,6 +194,7 @@ fun ChatInput(
     modifier: Modifier = Modifier,
     onUpdateChatModel: (Model) -> Unit,
     onUpdateProviders: (List<ProviderSetting>) -> Unit,
+    onClearContext: () -> Unit,
     onCancelClick: () -> Unit,
     onSendClick: () -> Unit,
 ) {
@@ -341,7 +384,7 @@ fun ChatInput(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
-                            Lucide.Compass,
+                            Lucide.Earth,
                             contentDescription = stringResource(R.string.use_web_search),
                             modifier = Modifier.size(20.dp)
                         )
@@ -355,6 +398,10 @@ fun ChatInput(
                         }
                     }
                 }
+
+                MoreOptionsButton(
+                    onClearContext = onClearContext
+                )
 
                 Spacer(Modifier.weight(1f))
 
@@ -379,9 +426,10 @@ fun ChatInput(
                         containerColor = if (state.loading) MaterialTheme.colorScheme.errorContainer else Color.Unspecified,
                         contentColor = if (state.loading) MaterialTheme.colorScheme.onErrorContainer else Color.Unspecified,
                     ),
-                    enabled = state.loading || !state.messageContent.isEmptyInputMessage()
+                    enabled = state.loading || !state.messageContent.isEmptyInputMessage(),
                 ) {
                     if (state.loading) {
+                        KeepScreenOn()
                         Icon(Lucide.X, stringResource(R.string.stop))
                     } else {
                         Icon(Lucide.ArrowUp, stringResource(R.string.send))
@@ -400,10 +448,48 @@ fun ChatInput(
                                 dismissExpand()
                             }
                         }
+
                         else -> {}
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun MoreOptionsButton(
+    onClearContext: () -> Unit = {},
+) {
+    var showMoreOptions by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = showMoreOptions,
+        onExpandedChange = { showMoreOptions = it },
+    ) {
+        IconButton(
+            onClick = { showMoreOptions = true },
+            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+        ) {
+            Icon(Lucide.Ellipsis, "More Options")
+        }
+
+        ExposedDropdownMenu(
+            expanded = showMoreOptions,
+            onDismissRequest = { showMoreOptions = false },
+            modifier = Modifier.width(200.dp)
+        ) {
+            DropdownMenuItem(
+                text = {
+                    Text(stringResource(R.string.chat_page_clear_context))
+                },
+                onClick = {
+                    showMoreOptions = false
+                    onClearContext()
+                },
+                leadingIcon = {
+                    Icon(Lucide.Eraser, null)
+                }
+            )
         }
     }
 }
@@ -499,7 +585,7 @@ private fun ImagePickButton(onAddImages: (List<Uri>) -> Unit = {}) {
         rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
             if (uris.isNotEmpty()) {
                 Log.d("PhotoPicker", "Selected URI: $uris")
-                onAddImages(context.createChatFiles(uris))
+                onAddImages(context.createChatFilesByContents(uris))
             } else {
                 Log.d("PhotoPicker", "No media selected")
             }
@@ -533,7 +619,7 @@ fun TakePicButton(onAddImages: (List<Uri>) -> Unit = {}) {
     val pickMedia =
         rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
             if (success) {
-                onAddImages(context.createChatFiles(listOf(providerUri!!)))
+                onAddImages(context.createChatFilesByContents(listOf(providerUri!!)))
             }
             // delete the temp file
             file?.delete()

@@ -1,7 +1,5 @@
 package me.rerere.ai.ui
 
-import androidx.core.net.toFile
-import androidx.core.net.toUri
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
@@ -13,8 +11,6 @@ import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.TokenUsage
 import me.rerere.ai.provider.Model
 import me.rerere.search.SearchResult
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.uuid.Uuid
 
 // 公共消息抽象, 具体的Provider实现会转换为API接口需要的DTO
@@ -24,7 +20,8 @@ data class UIMessage(
     val role: MessageRole,
     val parts: List<UIMessagePart>,
     val annotations: List<UIMessageAnnotation> = emptyList(),
-    val createdAt: LocalDateTime = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()),
+    val createdAt: LocalDateTime = Clock.System.now()
+        .toLocalDateTime(TimeZone.currentSystemDefault()),
     val modelId: Uuid? = null,
 ) {
     private fun appendChunk(chunk: MessageChunk): UIMessage {
@@ -53,11 +50,15 @@ data class UIMessage(
                         if (existingImagePart != null) {
                             acc.map { part ->
                                 if (part is UIMessagePart.Image) {
-                                    UIMessagePart.Image(existingImagePart.url + deltaPart.url)
+                                    UIMessagePart.Image(
+                                        url = existingImagePart.url + deltaPart.url,
+                                    )
                                 } else part
                             }
                         } else {
-                            acc + UIMessagePart.Image("data:image/png;base64,${deltaPart.url}")
+                            acc + UIMessagePart.Image(
+                                url = "data:image/png;base64,${deltaPart.url}",
+                            )
                         }
                     }
 
@@ -174,7 +175,7 @@ data class UIMessage(
     }
 
     fun isValidToShowActions() = parts.any {
-        (it is UIMessagePart.Text && it.text.isNotEmpty()) || it is UIMessagePart.Image
+        (it is UIMessagePart.Text && it.text.isNotBlank()) || it is UIMessagePart.Image
     }
 
     inline fun <reified P : UIMessagePart> hasPart(): Boolean {
@@ -289,17 +290,6 @@ sealed class UIMessagePart {
 
     @Serializable
     data class Image(val url: String) : UIMessagePart() {
-        @OptIn(ExperimentalEncodingApi::class)
-        fun toBase64(): String {
-            if(url.startsWith("data:")) return url
-            if(url.startsWith("file:")) {
-                val file = url.toUri().toFile()
-                val base64 = Base64.encode(file.readBytes())
-                return "data:image/*;base64,$base64"
-            }
-            return url
-        }
-
         override val priority: Int = 1
     }
 
