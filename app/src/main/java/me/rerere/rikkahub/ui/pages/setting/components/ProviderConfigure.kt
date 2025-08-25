@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -14,8 +15,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.rerere.ai.provider.ProviderSetting
+import me.rerere.rikkahub.R
+import me.rerere.rikkahub.ui.theme.JetbrainsMono
+import kotlin.reflect.KClass
 import kotlin.reflect.full.primaryConstructor
 
 @Composable
@@ -29,7 +34,7 @@ fun ProviderConfigure(
         modifier = modifier
     ) {
         // Type
-        if(!provider.builtIn) {
+        if (!provider.builtIn) {
             SingleChoiceSegmentedButtonRow(
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -44,7 +49,7 @@ fun ProviderConfigure(
                         },
                         selected = provider::class == type,
                         onClick = {
-                            onEdit(type.primaryConstructor?.callBy(emptyMap())!!)
+                            onEdit(provider.convertTo(type))
                         }
                     )
                 }
@@ -63,7 +68,25 @@ fun ProviderConfigure(
             is ProviderSetting.Google -> {
                 ProviderConfigureGoogle(provider, onEdit)
             }
+
+            is ProviderSetting.Claude -> {
+                ProviderConfigureClaude(provider, onEdit)
+            }
         }
+    }
+}
+
+fun ProviderSetting.convertTo(type: KClass<out ProviderSetting>): ProviderSetting {
+    val apiKey = when (this) {
+        is ProviderSetting.OpenAI -> this.apiKey
+        is ProviderSetting.Google -> this.apiKey
+        is ProviderSetting.Claude -> this.apiKey
+    }
+    val newProvider = type.primaryConstructor!!.callBy(emptyMap())
+    return when (newProvider) {
+        is ProviderSetting.OpenAI -> newProvider.copy(apiKey = apiKey)
+        is ProviderSetting.Google -> newProvider.copy(apiKey = apiKey)
+        is ProviderSetting.Claude -> newProvider.copy(apiKey = apiKey)
     }
 }
 
@@ -77,7 +100,7 @@ private fun ColumnScope.ProviderConfigureOpenAI(
     Row(
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("是否启用", modifier = Modifier.weight(1f))
+        Text(stringResource(id = R.string.setting_provider_page_enable), modifier = Modifier.weight(1f))
         Checkbox(
             checked = provider.enabled,
             onCheckedChange = {
@@ -92,7 +115,7 @@ private fun ColumnScope.ProviderConfigureOpenAI(
             onEdit(provider.copy(name = it.trim()))
         },
         label = {
-            Text("名称")
+            Text(stringResource(id = R.string.setting_provider_page_name))
         },
         modifier = Modifier.fillMaxWidth(),
     )
@@ -103,7 +126,88 @@ private fun ColumnScope.ProviderConfigureOpenAI(
             onEdit(provider.copy(apiKey = it.trim()))
         },
         label = {
-            Text("API Key")
+            Text(stringResource(id = R.string.setting_provider_page_api_key))
+        },
+        modifier = Modifier.fillMaxWidth(),
+        maxLines = 3,
+    )
+
+    OutlinedTextField(
+        value = provider.baseUrl,
+        onValueChange = {
+            onEdit(provider.copy(baseUrl = it.trim()))
+        },
+        label = {
+            Text(stringResource(id = R.string.setting_provider_page_api_base_url))
+        },
+        modifier = Modifier.fillMaxWidth()
+    )
+
+    if (!provider.useResponseApi) {
+        OutlinedTextField(
+            value = provider.chatCompletionsPath,
+            onValueChange = {
+                onEdit(provider.copy(chatCompletionsPath = it.trim()))
+            },
+            label = {
+                Text(stringResource(id = R.string.setting_provider_page_api_path))
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !provider.builtIn
+        )
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(stringResource(id = R.string.setting_provider_page_response_api), modifier = Modifier.weight(1f))
+        Checkbox(
+            checked = provider.useResponseApi,
+            onCheckedChange = {
+                onEdit(provider.copy(useResponseApi = it))
+            }
+        )
+    }
+}
+
+@Composable
+private fun ColumnScope.ProviderConfigureClaude(
+    provider: ProviderSetting.Claude,
+    onEdit: (provider: ProviderSetting.Claude) -> Unit
+) {
+    provider.description()
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(stringResource(id = R.string.setting_provider_page_enable), modifier = Modifier.weight(1f))
+        Checkbox(
+            checked = provider.enabled,
+            onCheckedChange = {
+                onEdit(provider.copy(enabled = it))
+            }
+        )
+    }
+
+    OutlinedTextField(
+        value = provider.name,
+        onValueChange = {
+            onEdit(provider.copy(name = it.trim()))
+        },
+        label = {
+            Text(stringResource(id = R.string.setting_provider_page_name))
+        },
+        modifier = Modifier.fillMaxWidth(),
+        maxLines = 3,
+    )
+
+    OutlinedTextField(
+        value = provider.apiKey,
+        onValueChange = {
+            onEdit(provider.copy(apiKey = it.trim()))
+        },
+        label = {
+            Text(stringResource(id = R.string.setting_provider_page_api_key))
         },
         modifier = Modifier.fillMaxWidth()
     )
@@ -114,7 +218,7 @@ private fun ColumnScope.ProviderConfigureOpenAI(
             onEdit(provider.copy(baseUrl = it.trim()))
         },
         label = {
-            Text("API Base Url")
+            Text(stringResource(id = R.string.setting_provider_page_api_base_url))
         },
         modifier = Modifier.fillMaxWidth()
     )
@@ -130,7 +234,7 @@ private fun ColumnScope.ProviderConfigureGoogle(
     Row(
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("是否启用", modifier = Modifier.weight(1f))
+        Text(stringResource(id = R.string.setting_provider_page_enable), modifier = Modifier.weight(1f))
         Checkbox(
             checked = provider.enabled,
             onCheckedChange = {
@@ -145,39 +249,15 @@ private fun ColumnScope.ProviderConfigureGoogle(
             onEdit(provider.copy(name = it.trim()))
         },
         label = {
-            Text("名称")
+            Text(stringResource(id = R.string.setting_provider_page_name))
         },
         modifier = Modifier.fillMaxWidth()
     )
-
-    OutlinedTextField(
-        value = provider.apiKey,
-        onValueChange = {
-            onEdit(provider.copy(apiKey = it.trim()))
-        },
-        label = {
-            Text("API Key")
-        },
-        modifier = Modifier.fillMaxWidth()
-    )
-
-    if(!provider.vertexAI) {
-        OutlinedTextField(
-            value = provider.baseUrl,
-            onValueChange = {
-                onEdit(provider.copy(baseUrl = it.trim()))
-            },
-            label = {
-                Text("API Base Url")
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("Vertex AI", modifier = Modifier.weight(1f))
+        Text(stringResource(id = R.string.setting_provider_page_vertex_ai), modifier = Modifier.weight(1f))
         Checkbox(
             checked = provider.vertexAI,
             onCheckedChange = {
@@ -186,7 +266,53 @@ private fun ColumnScope.ProviderConfigureGoogle(
         )
     }
 
-    if(provider.vertexAI) {
+    if (!provider.vertexAI) {
+        OutlinedTextField(
+            value = provider.apiKey,
+            onValueChange = {
+                onEdit(provider.copy(apiKey = it.trim()))
+            },
+            label = {
+                Text(stringResource(id = R.string.setting_provider_page_api_key))
+            },
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 3,
+        )
+
+        OutlinedTextField(
+            value = provider.baseUrl,
+            onValueChange = {
+                onEdit(provider.copy(baseUrl = it.trim()))
+            },
+            label = {
+                Text(stringResource(id = R.string.setting_provider_page_api_base_url))
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+    } else {
+        OutlinedTextField(
+            value = provider.serviceAccountEmail,
+            onValueChange = {
+                onEdit(provider.copy(serviceAccountEmail = it.trim()))
+            },
+            label = {
+                Text(stringResource(id = R.string.setting_provider_page_service_account_email))
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = provider.privateKey,
+            onValueChange = {
+                onEdit(provider.copy(privateKey = it.trim()))
+            },
+            label = {
+                Text(stringResource(id = R.string.setting_provider_page_private_key))
+            },
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 6,
+            minLines = 3,
+            textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = JetbrainsMono),
+        )
         OutlinedTextField(
             value = provider.location,
             onValueChange = {
@@ -194,7 +320,7 @@ private fun ColumnScope.ProviderConfigureGoogle(
             },
             label = {
                 // https://cloud.google.com/vertex-ai/generative-ai/docs/learn/locations#available-regions
-                Text("Location (e.g. us-central1)")
+                Text(stringResource(id = R.string.setting_provider_page_location))
             },
             modifier = Modifier.fillMaxWidth()
         )
@@ -204,7 +330,7 @@ private fun ColumnScope.ProviderConfigureGoogle(
                 onEdit(provider.copy(projectId = it.trim()))
             },
             label = {
-                Text("Project Id")
+                Text(stringResource(id = R.string.setting_provider_page_project_id))
             },
             modifier = Modifier.fillMaxWidth()
         )

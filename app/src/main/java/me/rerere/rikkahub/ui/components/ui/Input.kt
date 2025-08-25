@@ -29,7 +29,7 @@ fun <T : Number> OutlinedNumberInput(
         value = textFieldValue,
         onValueChange = { newValue ->
             textFieldValue = newValue
-            if(textFieldValue.isValidNumberInput()) {
+            if (textFieldValue.isValidNumberInput()) {
                 try {
                     @Suppress("UNCHECKED_CAST")
                     val newVal = when (value) {
@@ -65,7 +65,7 @@ fun <T : Number> NumberInput(
         value = textFieldValue,
         onValueChange = { newValue ->
             textFieldValue = newValue
-            if(textFieldValue.isValidNumberInput()) {
+            if (textFieldValue.isValidNumberInput()) {
                 try {
                     @Suppress("UNCHECKED_CAST")
                     val newVal = when (value) {

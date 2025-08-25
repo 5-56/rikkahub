@@ -1,4 +1,7 @@
+import org.apache.tools.ant.taskdefs.condition.Os
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import java.io.FileInputStream
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -8,6 +11,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics)
+    alias(libs.plugins.chaquo.python)
 }
 
 android {
@@ -18,23 +22,46 @@ android {
         applicationId = "me.rerere.rikkahub"
         minSdk = 26
         targetSdk = 36
-        versionCode = 43
-        versionName = "0.7.17"
+        versionCode = 88
+        versionName = "1.4.14"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        splits {
-            abi {
-                reset()
-                include("arm64-v8a", "x86_64")
-                isEnable = true
-                isUniversalApk = true
+        defaultConfig {
+            ndk {
+                abiFilters += listOf("arm64-v8a", "x86_64")
+            }
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            val localProperties = Properties()
+            val localPropertiesFile = rootProject.file("local.properties")
+
+            if (localPropertiesFile.exists()) {
+                localProperties.load(FileInputStream(localPropertiesFile))
+
+                val storeFilePath = localProperties.getProperty("storeFile")
+                val storePasswordValue = localProperties.getProperty("storePassword")
+                val keyAliasValue = localProperties.getProperty("keyAlias")
+                val keyPasswordValue = localProperties.getProperty("keyPassword")
+
+                if (storeFilePath != null && storePasswordValue != null &&
+                    keyAliasValue != null && keyPasswordValue != null
+                ) {
+                    storeFile = file(storeFilePath)
+                    storePassword = storePasswordValue
+                    keyAlias = keyAliasValue
+                    keyPassword = keyPasswordValue
+                }
             }
         }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -45,6 +72,7 @@ android {
             buildConfigField("String", "VERSION_CODE", "\"${android.defaultConfig.versionCode}\"")
         }
         debug {
+            applicationIdSuffix = ".debug"
             buildConfigField("String", "VERSION_NAME", "\"${android.defaultConfig.versionName}\"")
             buildConfigField("String", "VERSION_CODE", "\"${android.defaultConfig.versionCode}\"")
         }
@@ -68,13 +96,14 @@ android {
             this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
 
             val variantName = name
-            val apkName = "app_" + defaultConfig.versionName  + "_" + variantName + ".apk"
+            val apkName = "rikkahub_" + defaultConfig.versionName + "_" + variantName + ".apk"
 
             outputFileName = apkName
         }
     }
     tasks.withType<KotlinCompile>().configureEach {
         compilerOptions.optIn.add("androidx.compose.material3.ExperimentalMaterial3Api")
+        compilerOptions.optIn.add("androidx.compose.material3.ExperimentalMaterial3ExpressiveApi")
         compilerOptions.optIn.add("androidx.compose.animation.ExperimentalAnimationApi")
         compilerOptions.optIn.add("androidx.compose.animation.ExperimentalSharedTransitionApi")
         compilerOptions.optIn.add("androidx.compose.foundation.ExperimentalFoundationApi")
@@ -85,31 +114,63 @@ android {
     }
 }
 
+tasks.register("buildAll") {
+    dependsOn("assembleRelease", "bundleRelease")
+    description = "Build both APK and AAB"
+}
+
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+chaquopy {
+    defaultConfig {
+        version = "3.12"
+        if(Os.isFamily(Os.FAMILY_MAC)) buildPython("/Library/Frameworks/Python.framework/Versions/3.12/bin/python3")
+        pip {
+            install("pypdf")
+            install("python-docx")
+        }
+    }
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.browser)
 
     // Compose
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.material3.adaptive)
+    implementation(libs.androidx.material3.adaptive.layout)
+
+    // Navigation 2
+    implementation(libs.androidx.navigation2)
+
+    // Navigation 3
+//    implementation(libs.androidx.navigation3.runtime)
+//    implementation(libs.androidx.navigation3.ui)
+//    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+//    implementation(libs.androidx.material3.adaptive.navigation3)
 
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.config)
 
     // DataStore
     implementation(libs.androidx.datastore.preferences)
+
+    // Image metadata extractor
+    // https://github.com/drewnoakes/metadata-extractor
+    implementation("com.drewnoakes:metadata-extractor:2.19.0")
 
     // koin
     implementation(platform(libs.koin.bom))
@@ -125,6 +186,12 @@ dependencies {
     implementation(libs.okhttp.sse)
     implementation(libs.retrofit)
     implementation(libs.retrofit.serialization.json)
+
+    // ucrop
+    implementation(libs.ucrop)
+
+    // pebble (template engine)
+    implementation(libs.pebble)
 
     // coil
     implementation(libs.coil.compose)
@@ -152,11 +219,13 @@ dependencies {
     implementation(libs.androidx.paging.runtime)
     implementation(libs.androidx.paging.compose)
 
+    // WebDav
+    implementation(libs.dav4jvm) {
+        exclude(group = "org.ogce", module = "xpp3")
+    }
+
     // Apache Commons Text
     implementation(libs.commons.text)
-
-    // Compose Cropper
-    implementation(libs.ucrop)
 
     // Toast (Sonner)
     implementation(libs.sonner)
@@ -179,11 +248,16 @@ dependencies {
     implementation(libs.jlatexmath.font.greek)
     implementation(libs.jlatexmath.font.cyrillic)
 
+    // mcp
+    implementation(libs.modelcontextprotocol.kotlin.sdk)
+
     // modules
     implementation(project(":ai"))
     implementation(project(":highlight"))
     implementation(project(":search"))
     implementation(project(":rag"))
+    implementation(project(":tts"))
+    implementation(project(":common"))
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
     implementation(kotlin("reflect"))
 

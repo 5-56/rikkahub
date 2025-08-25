@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Card
 import androidx.compose.material3.LocalContentColor
@@ -19,25 +20,25 @@ import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.carousel.CarouselItemScope
-import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
-import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.Screen
+import me.rerere.rikkahub.ui.components.ui.Greeting
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.Favicon
 import me.rerere.rikkahub.ui.context.LocalNavController
+import me.rerere.rikkahub.utils.openUrl
 import me.rerere.rikkahub.utils.plus
-import me.rerere.rikkahub.utils.urlEncode
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.util.Calendar
 
 @Composable
 fun MenuPage() {
@@ -56,7 +57,7 @@ fun MenuPage() {
             contentPadding = it + PaddingValues(16.dp)
         ) {
             item {
-                Greeting()
+                Greeting(modifier = Modifier.padding(vertical = 32.dp))
             }
 
             item {
@@ -71,33 +72,11 @@ fun MenuPage() {
 }
 
 @Composable
-private fun Greeting() {
-    @Composable
-    fun getGreetingMessage(): String {
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        return when (hour) {
-            in 5..11 -> stringResource(id = R.string.menu_page_morning_greeting)
-            in 12..17 -> stringResource(id = R.string.menu_page_afternoon_greeting)
-            in 18..22 -> stringResource(id = R.string.menu_page_evening_greeting)
-            else -> stringResource(id = R.string.menu_page_night_greeting)
-        }
-    }
-
-    Column {
-        Text(
-            text = getGreetingMessage(),
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(vertical = 24.dp)
-        )
-    }
-}
-
-@Composable
 private fun FeaturesSection() {
     val navController = LocalNavController.current
 
     @Composable
-    fun CarouselItemScope.FeatureCard(
+    fun FeatureCard(
         title: @Composable () -> Unit,
         image: @Composable () -> Unit,
         modifier: Modifier = Modifier,
@@ -105,84 +84,95 @@ private fun FeaturesSection() {
     ) {
         Box(
             modifier = modifier
+                .clip(MaterialTheme.shapes.medium)
                 .clickable { onClick() }
-                .maskClip(MaterialTheme.shapes.medium)
+                .height(150.dp)
+                .wrapContentHeight()
                 .fillMaxWidth()
-                .height(200.dp)
         ) {
             image()
             Column(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(8.dp)
+                    .padding(16.dp)
             ) {
-                ProvideTextStyle(MaterialTheme.typography.titleMedium.copy(color = Color.White)) {
+                ProvideTextStyle(MaterialTheme.typography.headlineSmall.copy(color = Color.White)) {
                     title()
                 }
             }
         }
     }
 
-    HorizontalMultiBrowseCarousel(
-        state = rememberCarouselState { 2 },
-        itemSpacing = 8.dp,
-        preferredItemWidth = 250.dp
-    ) { index ->
-        when (index) {
-            0 -> {
-                FeatureCard(
-                    title = {
-                        Text(stringResource(id = R.string.menu_page_ai_translator))
-                    },
-                    image = {
-                        AsyncImage(
-                            model = "file:///android_asset/banner/translator.jpeg",
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    },
-                ) {
-                    navController.navigate("translator")
-                }
-            }
-
-            1 -> {
-                FeatureCard(
-                    title = {
-                        Text(stringResource(id = R.string.menu_page_knowledge_base))
-                    },
-                    image = {
-                        AsyncImage(
-                            model = "file:///android_asset/banner/library.jpeg",
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    },
-                ) {
-                    // navController.navigate("library")
-                }
-            }
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight(),
+    ) {
+        FeatureCard(
+            title = {
+                Text(stringResource(id = R.string.menu_page_ai_translator))
+            },
+            image = {
+                AsyncImage(
+                    model = "file:///android_asset/banner/banner-1.png",
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            },
+        ) {
+            navController.navigate(Screen.Translator)
+        }
+        FeatureCard(
+            title = {
+                Text(stringResource(id = R.string.menu_page_image_generation))
+            },
+            image = {
+                AsyncImage(
+                    model = "file:///android_asset/banner/banner-3.png",
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            },
+        ) {
+            navController.navigate(Screen.ImageGen)
+        }
+        FeatureCard(
+            title = {
+                Text(stringResource(id = R.string.menu_page_knowledge_base))
+            },
+            image = {
+                AsyncImage(
+                    model = "file:///android_asset/banner/banner-2.png",
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            },
+        ) {
+            // navController.push(Screen.Library)
         }
     }
 }
 
 @Composable
 private fun LeaderBoard() {
-    val navController = LocalNavController.current
+    val context = LocalContext.current
 
     @Composable
     fun LeaderBoardItem(
         url: String,
         name: String,
+        modifier: Modifier = Modifier
     ) {
         Card(
             onClick = {
-                navController.navigate("webview?url=${url.urlEncode()}")
+                context.openUrl(url)
             },
-            modifier = Modifier.widthIn(min = 150.dp)
+            modifier = modifier.widthIn(min = 150.dp)
         ) {
             Column(
                 modifier = Modifier.padding(8.dp),
@@ -193,7 +183,7 @@ private fun LeaderBoard() {
                 )
                 Text(
                     text = name,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
                     text = url.toHttpUrl().host,
@@ -207,7 +197,7 @@ private fun LeaderBoard() {
     Column {
         Text(
             text = stringResource(id = R.string.menu_page_llm_leaderboard),
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(vertical = 16.dp)
         )
@@ -217,13 +207,15 @@ private fun LeaderBoard() {
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             LeaderBoardItem(
-                url = "https://beta.lmarena.ai/leaderboard",
-                name = "LMArena"
+                url = "https://lmarena.ai/leaderboard",
+                name = "LMArena",
+                modifier = Modifier.weight(1f),
             )
 
             LeaderBoardItem(
                 url = "https://livebench.ai/#/",
-                name = "LiveBench"
+                name = "LiveBench",
+                modifier = Modifier.weight(1f),
             )
         }
     }

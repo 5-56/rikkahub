@@ -100,7 +100,7 @@ fun PresetThemeButton(
                 )
                 drawCircle(
                     color = scheme.primary,
-                    radius = if(selected) 15.dp.toPx() else 10.dp.toPx(),
+                    radius = if (selected) 15.dp.toPx() else 10.dp.toPx(),
                     center = Offset(
                         x = size.width / 2,
                         y = size.height / 2

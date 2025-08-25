@@ -22,29 +22,29 @@ class HtmlExtractor : DataExtractor<String> {
         return try {
             val document = Jsoup.parse(data)
             val result = mutableListOf<String>()
-            
+
             // 提取标题
             val title = document.title()
             if (title.isNotBlank()) {
                 result.add(title)
             }
-            
+
             // 提取正文内容
             extractContent(document, result)
-            
+
             result
         } catch (e: Exception) {
             emptyList()
         }
     }
-    
+
     /**
      * 提取文档中的主要内容
      */
     private fun extractContent(document: Document, result: MutableList<String>) {
         // 移除不需要的元素
         document.select("script, style, iframe, noscript, head, nav, footer").remove()
-        
+
         // 提取段落文本
         val paragraphs = document.select("p")
         for (paragraph in paragraphs) {
@@ -53,7 +53,7 @@ class HtmlExtractor : DataExtractor<String> {
                 result.add(text)
             }
         }
-        
+
         // 提取标题元素
         val headings = document.select("h1, h2, h3, h4, h5, h6")
         for (heading in headings) {
@@ -62,7 +62,7 @@ class HtmlExtractor : DataExtractor<String> {
                 result.add(text)
             }
         }
-        
+
         // 提取列表项
         val listItems = document.select("li")
         for (item in listItems) {
@@ -71,7 +71,7 @@ class HtmlExtractor : DataExtractor<String> {
                 result.add(text)
             }
         }
-        
+
         // 如果没有足够内容，提取所有文本
         if (result.isEmpty()) {
             val bodyText = document.body().text().trim()
@@ -80,4 +80,4 @@ class HtmlExtractor : DataExtractor<String> {
             }
         }
     }
-} 
+}

@@ -10,7 +10,7 @@ interface TextSplitter {
      * @return 分割后的文本片段列表
      */
     fun split(text: String): List<String>
-    
+
     /**
      * 获取分割器的配置信息
      * @return 配置信息Map

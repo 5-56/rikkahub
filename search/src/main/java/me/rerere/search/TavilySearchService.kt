@@ -4,6 +4,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -14,6 +15,8 @@ import me.rerere.search.SearchService.Companion.httpClient
 import me.rerere.search.SearchService.Companion.json
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+
+private const val TAG = "TavilySearchService"
 
 object TavilySearchService : SearchService<SearchServiceOptions.TavilyOptions> {
     override val name: String = "Tavily"
@@ -26,7 +29,7 @@ object TavilySearchService : SearchService<SearchServiceOptions.TavilyOptions> {
                 urlHandler.openUri("https://app.tavily.com/home")
             }
         ) {
-            Text("点击获取API Key")
+            Text(stringResource(R.string.click_to_get_api_key))
         }
     }
 
@@ -45,11 +48,11 @@ object TavilySearchService : SearchService<SearchServiceOptions.TavilyOptions> {
                 .post(body.toString().toRequestBody())
                 .addHeader("Authorization", "Bearer ${serviceOptions.apiKey}")
                 .build()
-            val response = httpClient.newCall(request).execute()
+            val response = httpClient.newCall(request).await()
             if (response.isSuccessful) {
-                val response = response.body?.string()?.let {
+                val response = response.body.string().let {
                     json.decodeFromString<SearchResponse>(it)
-                } ?: error("Failed to parse response")
+                }
 
                 return@withContext Result.success(
                     SearchResult(

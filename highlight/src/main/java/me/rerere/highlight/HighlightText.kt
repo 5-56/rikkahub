@@ -7,7 +7,9 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
@@ -23,6 +25,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEach
 
 val LocalHighlighter = compositionLocalOf<Highlighter> { error("No Highlighter provided") }
+
+private const val MAX_CODE_LENGTH = 4096
 
 @Composable
 fun HighlightText(
@@ -44,16 +48,21 @@ fun HighlightText(
     var tokens: List<HighlightToken> by remember { mutableStateOf(emptyList()) }
     var annotatedString by remember { mutableStateOf(AnnotatedString(code)) }
 
-    LaunchedEffect(code, language) {
-        runCatching {
-            tokens = highlighter.highlight(code, language)
-        }.onFailure {
-            it.printStackTrace()
-            tokens = listOf(HighlightToken.Plain(code))
-        }
-        annotatedString = buildAnnotatedString {
-            tokens.fastForEach { token ->
-                buildHighlightText(token, colors)
+    val updatedCode by rememberUpdatedState(code)
+    val updatedLanguage by rememberUpdatedState(language)
+    LaunchedEffect(Unit) {
+        snapshotFlow { updatedCode to updatedLanguage }.collect {
+            tokens = if (updatedCode.length <= MAX_CODE_LENGTH) {
+                highlighter.highlight(updatedCode, updatedLanguage)
+            } else {
+                listOf(
+                    HighlightToken.Plain(content = updatedCode)
+                )
+            }
+            annotatedString = buildAnnotatedString {
+                tokens.fastForEach { token ->
+                    buildHighlightText(token, colors)
+                }
             }
         }
     }

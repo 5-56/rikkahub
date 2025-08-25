@@ -52,43 +52,44 @@ class Highlighter(ctx: Context) {
         context.globalObject.getJSFunction("highlight")
     }
 
-    suspend fun highlight(code: String, language: String) = suspendCancellableCoroutine { continuation ->
-        executor.submit {
-            runCatching {
-                val result = highlightFn.call(code, language)
-                require(result is QuickJSArray) {
-                    "highlight result must be an array"
-                }
-                val tokens = arrayListOf<HighlightToken>()
-                for (i in 0 until result.length()) {
-                    when (val element = result[i]) {
-                        is String -> tokens.add(
-                            HighlightToken.Plain(
-                                content = element,
-                            )
-                        )
-
-                        is QuickJSObject -> {
-                            val json = element.stringify()
-                            val token = format.decodeFromString<HighlightToken.Token>(
-                                HighlightTokenSerializer, json
-                            )
-                            tokens.add(token)
-                        }
-
-                        else -> error("Unknown type: ${element::class.java.name}")
+    suspend fun highlight(code: String, language: String) =
+        suspendCancellableCoroutine { continuation ->
+            executor.submit {
+                runCatching {
+                    val result = highlightFn.call(code, language)
+                    require(result is QuickJSArray) {
+                        "highlight result must be an array"
                     }
-                }
-                result.release()
-                continuation.resume(tokens)
-            }.onFailure {
-                it.printStackTrace()
-                if (continuation.isActive) {
-                    continuation.resumeWithException(it)
+                    val tokens = arrayListOf<HighlightToken>()
+                    for (i in 0 until result.length()) {
+                        when (val element = result[i]) {
+                            is String -> tokens.add(
+                                HighlightToken.Plain(
+                                    content = element,
+                                )
+                            )
+
+                            is QuickJSObject -> {
+                                val json = element.stringify()
+                                val token = format.decodeFromString<HighlightToken.Token>(
+                                    HighlightTokenSerializer, json
+                                )
+                                tokens.add(token)
+                            }
+
+                            else -> error("Unknown type: ${element::class.java.name}")
+                        }
+                    }
+                    result.release()
+                    continuation.resume(tokens)
+                }.onFailure {
+                    it.printStackTrace()
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(it)
+                    }
                 }
             }
         }
-    }
 
     fun destroy() {
         context.destroy()

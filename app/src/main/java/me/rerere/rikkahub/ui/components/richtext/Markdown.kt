@@ -3,32 +3,39 @@ package me.rerere.rikkahub.ui.components.richtext
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
@@ -47,15 +54,20 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEach
 import androidx.core.net.toUri
+import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.Lucide
+import me.rerere.highlight.HighlightText
 import me.rerere.rikkahub.ui.components.table.ColumnDefinition
 import me.rerere.rikkahub.ui.components.table.ColumnWidth
 import me.rerere.rikkahub.ui.components.table.DataTable
+import me.rerere.rikkahub.ui.theme.JetbrainsMono
+import me.rerere.rikkahub.utils.toDp
+import me.rerere.rikkahub.utils.unescapeHtml
 import org.intellij.markdown.IElementType
 import org.intellij.markdown.MarkdownElementTypes
 import org.intellij.markdown.MarkdownTokenTypes
@@ -67,7 +79,10 @@ import org.intellij.markdown.flavours.gfm.GFMTokenTypes
 import org.intellij.markdown.parser.MarkdownParser
 
 private val flavour by lazy {
-    GFMFlavourDescriptor()
+    GFMFlavourDescriptor(
+        makeHttpsAutoLinks = true,
+        useSafeLinks = true
+    )
 }
 
 private val parser by lazy {
@@ -76,7 +91,6 @@ private val parser by lazy {
 
 private val INLINE_LATEX_REGEX = Regex("\\\\\\((.+?)\\\\\\)")
 private val BLOCK_LATEX_REGEX = Regex("\\\\\\[(.+?)\\\\\\]", RegexOption.DOT_MATCHES_ALL)
-private val CITATION_REGEX = Regex("\\[citation:(\\w+)\\]")
 val THINKING_REGEX = Regex("<think>([\\s\\S]*?)(?:</think>|$)", RegexOption.DOT_MATCHES_ALL)
 
 // 预处理markdown内容
@@ -92,12 +106,6 @@ private fun preProcess(content: String): String {
             "$$" + matchResult.groupValues[1] + "$$"
         }
 
-    // 替换引用 [citation:xx] 为 <citation>xx</citation>
-    result = result.replace(CITATION_REGEX) { matchResult ->
-        " [citation](${matchResult.groupValues[1]})"
-    }
-    MarkdownElementTypes.SHORT_REFERENCE_LINK
-
     // 替换思考
     result = result.replace(THINKING_REGEX) { matchResult ->
         matchResult.groupValues[1].lines().filter { it.isNotBlank() }.joinToString("\n") { ">$it" }
@@ -109,26 +117,48 @@ private fun preProcess(content: String): String {
 @Preview(showBackground = true)
 @Composable
 private fun MarkdownPreview() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-    ) {
-        MarkdownBlock(
-            content = """
-                # Hello World
-                
-                | A | B |
-                | - | - |
-                | 1 | 2 |
-                
-                | Name | Age | Address | Email | Job | Homepage |
-                | ---- | --- | ------- | ----- | --- | -------- |
-                | John | 25  | New York | john@example.com | Software Engineer | john.com |
-                | Jane | 26  | London   | jane@example.com | Data Scientist | jane.com |
-                
-            """.trimIndent()
-        )
+    MaterialTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            MarkdownBlock(
+                content = "Hi there!",
+                modifier = Modifier.background(Color.Red)
+            )
+            MarkdownBlock(
+                content = """
+                    ### 🌍 This is Markdown Test This Markdown Test
+                    1. How many roads must a man walk down
+                        * the slings and arrows of outrageous fortune, Or to take arms against a sea of troubles,
+                        * by opposing end them.
+                            * How many times must a man look up, Before he can see the sky?
+                            * How many times $ f(x) = \sum_{n=0}^{\infty} \frac{f^{(n)}(a)}{n!}(x-a)^n$
+                    2. How many times must a man look up, Before he can see the sky?
+
+                    * [ ] Before they're allowed to be free? Yes, 'n' how many times can a man turn his head
+                    * [x] Before they're allowed to be free? Yes, 'n' how many times can a man turn his head
+
+                    4. For in that sleep of death what dreams may come [citation](1)
+
+                    This is Markdown Test, This is Markdown Test.
+
+                    ***
+                    This is Markdown Test, This is Markdown Test.
+
+                    | Name | Age | Address | Email | Job | Homepage |
+                    | ---- | --- | ------- | ----- | --- | -------- |
+                    | John | 25  | New York | john@example.com | Software Engineer | john.com |
+                    | Jane | 26  | London   | jane@example.com | Data Scientist | jane.com |
+
+                    ## HTML Escaping
+                    This is a &gt;  test
+
+                """.trimIndent()
+            )
+        }
     }
 }
 
@@ -137,7 +167,7 @@ fun MarkdownBlock(
     content: String,
     modifier: Modifier = Modifier,
     style: TextStyle = LocalTextStyle.current,
-    onClickCitation: (Int) -> Unit = {}
+    onClickCitation: (String) -> Unit = {}
 ) {
     val preprocessed = remember(content) { preProcess(content) }
     val astTree = remember(preprocessed) {
@@ -149,7 +179,7 @@ fun MarkdownBlock(
 
     ProvideTextStyle(style) {
         Column(
-            modifier = modifier,
+            modifier = modifier.padding(start = 4.dp)
         ) {
             astTree.children.fastForEach { child ->
                 MarkdownNode(
@@ -213,7 +243,8 @@ fun MarkdownNode(
     node: ASTNode,
     content: String,
     modifier: Modifier = Modifier,
-    onClickCitation: (Int) -> Unit
+    onClickCitation: (String) -> Unit = {},
+    listLevel: Int = 0
 ) {
     when (node.type) {
         // 文件根节点
@@ -255,14 +286,17 @@ fun MarkdownNode(
                 else -> throw IllegalArgumentException("Unknown header type")
             }
             ProvideTextStyle(value = style) {
-                FlowRow(modifier = modifier.padding(vertical = 8.dp)) {
-                    node.children.forEach { child ->
-                        MarkdownNode(
-                            node = child,
-                            content = content,
-                            modifier = Modifier.align(Alignment.CenterVertically),
-                            onClickCitation = onClickCitation
-                        )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    node.children.fastForEach { node ->
+                        if (node.type == MarkdownTokenTypes.ATX_CONTENT) {
+                            Paragraph(
+                                node = node,
+                                content = content,
+                                onClickCitation = onClickCitation,
+                                modifier = modifier.padding(vertical = 16.dp),
+                                trim = true,
+                            )
+                        }
                     }
                 }
             }
@@ -270,54 +304,45 @@ fun MarkdownNode(
 
         // 列表
         MarkdownElementTypes.UNORDERED_LIST -> {
-            Column(
-                modifier = modifier.padding(start = 4.dp)
-            ) {
-                node.children.fastForEach { child ->
-                    if (child.type == MarkdownElementTypes.LIST_ITEM) {
-                        Row {
-                            Text(
-                                text = "• ",
-                                modifier = Modifier.alignByBaseline()
-                            )
-                            FlowRow {
-                                child.children.fastForEach { listItemChild ->
-                                    MarkdownNode(
-                                        node = listItemChild,
-                                        content = content,
-                                        onClickCitation = onClickCitation
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            UnorderedListNode(
+                node = node,
+                content = content,
+                modifier = modifier.padding(vertical = 4.dp),
+                onClickCitation = onClickCitation,
+                level = listLevel
+            )
         }
 
         MarkdownElementTypes.ORDERED_LIST -> {
-            Column(
-                modifier = modifier.padding(start = 4.dp)
+            OrderedListNode(
+                node = node,
+                content = content,
+                modifier = modifier.padding(vertical = 4.dp),
+                onClickCitation = onClickCitation,
+                level = listLevel
+            )
+        }
+
+        // Checkbox
+        GFMTokenTypes.CHECK_BOX -> {
+            val isChecked = node.getTextInNode(content).trim() == "[x]"
+            Surface(
+                shape = RoundedCornerShape(2.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                modifier = modifier,
             ) {
-                var index = 1
-                node.children.fastForEach { child ->
-                    if (child.type == MarkdownElementTypes.LIST_ITEM) {
-                        Row {
-                            Text(
-                                text = child.findChildOfType(MarkdownTokenTypes.LIST_NUMBER)
-                                    ?.getTextInNode(content) ?: "-",
-                            )
-                            FlowRow {
-                                child.children.fastForEach { listItemChild ->
-                                    MarkdownNode(
-                                        node = listItemChild,
-                                        content = content,
-                                        onClickCitation = onClickCitation
-                                    )
-                                }
-                            }
-                        }
-                        index++
+                Box(
+                    modifier = Modifier
+                        .padding(2.dp)
+                        .size(LocalTextStyle.current.fontSize.toDp() * 0.8f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (isChecked) {
+                        Icon(
+                            imageVector = Lucide.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
@@ -328,7 +353,7 @@ fun MarkdownNode(
             ProvideTextStyle(LocalTextStyle.current.copy(fontStyle = FontStyle.Italic)) {
                 val borderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                 val bgColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-                FlowRow(
+                Column(
                     modifier = Modifier
                         .drawWithContent {
                             drawContent()
@@ -357,9 +382,11 @@ fun MarkdownNode(
         // 链接
         MarkdownElementTypes.INLINE_LINK -> {
             val linkText =
-                node.findChildOfType(MarkdownTokenTypes.TEXT)?.getTextInNode(content) ?: ""
+                node.findChildOfTypeRecursive(MarkdownElementTypes.LINK_TEXT)
+                    ?.findChildOfTypeRecursive(GFMTokenTypes.GFM_AUTOLINK, MarkdownTokenTypes.TEXT)
+                    ?.getTextInNode(content) ?: ""
             val linkDest =
-                node.findChildOfType(MarkdownElementTypes.LINK_DESTINATION)?.getTextInNode(content)
+                node.findChildOfTypeRecursive(MarkdownElementTypes.LINK_DESTINATION)?.getTextInNode(content)
                     ?: ""
             val context = LocalContext.current
             Text(
@@ -388,7 +415,7 @@ fun MarkdownNode(
         }
 
         MarkdownElementTypes.STRONG -> {
-            ProvideTextStyle(TextStyle(fontWeight = FontWeight.Bold)) {
+            ProvideTextStyle(TextStyle(fontWeight = FontWeight.SemiBold)) {
                 node.children.fastForEach { child ->
                     MarkdownNode(
                         node = child,
@@ -410,22 +437,34 @@ fun MarkdownNode(
         }
 
         GFMElementTypes.TABLE -> {
-            TableNode(node, content, modifier)
+            TableNode(node = node, content = content, modifier = modifier)
+        }
+
+        MarkdownTokenTypes.HORIZONTAL_RULE -> {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 16.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                thickness = 0.5.dp
+            )
         }
 
         // 图片
         MarkdownElementTypes.IMAGE -> {
             val altText =
-                node.findChildOfType(MarkdownElementTypes.LINK_TEXT)?.getTextInNode(content) ?: ""
+                node.findChildOfTypeRecursive(MarkdownElementTypes.LINK_TEXT)?.getTextInNode(content) ?: ""
             val imageUrl =
-                node.findChildOfType(MarkdownElementTypes.LINK_DESTINATION)?.getTextInNode(content)
+                node.findChildOfTypeRecursive(MarkdownElementTypes.LINK_DESTINATION)?.getTextInNode(content)
                     ?: ""
             Column(
                 modifier = modifier,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // 这里可以使用Coil等图片加载库加载图片
-                ZoomableAsyncImage(model = imageUrl, contentDescription = altText)
+                ZoomableAsyncImage(
+                    model = imageUrl,
+                    contentDescription = altText,
+                    modifier = Modifier.widthIn(min = 120.dp).heightIn(min = 120.dp),
+                )
             }
         }
 
@@ -470,11 +509,25 @@ fun MarkdownNode(
 
         // 代码块
         MarkdownElementTypes.CODE_FENCE -> {
-            val code = node.getTextInNode(content, MarkdownTokenTypes.CODE_FENCE_CONTENT)
-            val language = node.findChildOfType(MarkdownTokenTypes.FENCE_LANG)
+            // 这里不能直接取CODE_FENCE_CONTENT的内容，因为首行indent没有包含在内
+            // 因此，需要往上找到最后一个EOL元素，用它来作为代码块的起始offset
+            val contentStartIndex =
+                node.children.indexOfFirst { it.type == MarkdownTokenTypes.CODE_FENCE_CONTENT }
+            if (contentStartIndex == -1) return
+            val eolElement = node.children.subList(0, contentStartIndex)
+                .findLast { it.type == MarkdownTokenTypes.EOL } ?: return
+            val codeContentStartOffset = eolElement.endOffset
+            val codeContentEndOffset = node.children
+                .findLast { it.type == MarkdownTokenTypes.CODE_FENCE_CONTENT }?.endOffset ?: return
+            val code = content.substring(
+                codeContentStartOffset,
+                codeContentEndOffset
+            ).trimIndent()
+
+            val language = node.findChildOfTypeRecursive(MarkdownTokenTypes.FENCE_LANG)
                 ?.getTextInNode(content)
                 ?: "plaintext"
-            val hasEnd = node.findChildOfType(MarkdownTokenTypes.CODE_FENCE_END) != null
+            val hasEnd = node.findChildOfTypeRecursive(MarkdownTokenTypes.CODE_FENCE_END) != null
 
             HighlightCodeBlock(
                 code = code,
@@ -486,16 +539,22 @@ fun MarkdownNode(
             )
         }
 
-        MarkdownTokenTypes.TEXT, MarkdownTokenTypes.WHITE_SPACE -> {
+        MarkdownTokenTypes.TEXT -> {
             val text = node.getTextInNode(content)
             Text(
                 text = text,
-                modifier = modifier
+                modifier = modifier,
             )
         }
 
-        MarkdownTokenTypes.EOL -> {
-            Spacer(Modifier.fillMaxWidth())
+        MarkdownElementTypes.HTML_BLOCK -> {
+            val text = node.getTextInNode(content)
+            HighlightText(
+                code = text,
+                modifier = modifier,
+                language = "html",
+                fontFamily = JetbrainsMono,
+            )
         }
 
         // 其他类型的节点，递归处理子节点
@@ -514,15 +573,138 @@ fun MarkdownNode(
 }
 
 @Composable
+private fun UnorderedListNode(
+    node: ASTNode,
+    content: String,
+    modifier: Modifier = Modifier,
+    onClickCitation: (String) -> Unit = {},
+    level: Int = 0
+) {
+    val bulletStyle = when (level % 3) {
+        0 -> "• "
+        1 -> "◦ "
+        else -> "▪ "
+    }
+
+    Column(
+        modifier = modifier.padding(start = (level * 8).dp)
+    ) {
+        node.children.fastForEach { child ->
+            if (child.type == MarkdownElementTypes.LIST_ITEM) {
+                ListItemNode(
+                    node = child,
+                    content = content,
+                    bulletText = bulletStyle,
+                    onClickCitation = onClickCitation,
+                    level = level
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrderedListNode(
+    node: ASTNode,
+    content: String,
+    modifier: Modifier = Modifier,
+    onClickCitation: (String) -> Unit = {},
+    level: Int = 0
+) {
+    Column(modifier.padding(start = (level * 8).dp)) {
+        var index = 1
+        node.children.fastForEach { child ->
+            if (child.type == MarkdownElementTypes.LIST_ITEM) {
+                val numberText = child.findChildOfTypeRecursive(MarkdownTokenTypes.LIST_NUMBER)
+                    ?.getTextInNode(content) ?: "$index. "
+                ListItemNode(
+                    node = child,
+                    content = content,
+                    bulletText = numberText,
+                    onClickCitation = onClickCitation,
+                    level = level
+                )
+                index++
+            }
+        }
+    }
+}
+
+@Composable
+private fun ListItemNode(
+    node: ASTNode,
+    content: String,
+    bulletText: String,
+    onClickCitation: (String) -> Unit = {},
+    level: Int
+) {
+    Column {
+        // 分离列表项的直接内容和嵌套列表
+        val (directContent, nestedLists) = separateContentAndLists(node)
+        // directContent 渲染处理
+        if (directContent.isNotEmpty()) {
+            Row {
+                Text(
+                    text = bulletText,
+                    modifier = Modifier.alignByBaseline()
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
+                    directContent.fastForEach { contentChild ->
+                        MarkdownNode(
+                            node = contentChild,
+                            content = content,
+                            onClickCitation = onClickCitation,
+                            listLevel = level,
+                        )
+                    }
+                }
+            }
+        }
+        // nestedLists 渲染处理
+        nestedLists.fastForEach { nestedList ->
+            MarkdownNode(
+                node = nestedList,
+                content = content,
+                onClickCitation = onClickCitation,
+                listLevel = level + 1 // 增加层级
+            )
+        }
+    }
+}
+
+// 分离列表项的直接内容和嵌套列表
+private fun separateContentAndLists(listItemNode: ASTNode): Pair<List<ASTNode>, List<ASTNode>> {
+    val directContent = mutableListOf<ASTNode>()
+    val nestedLists = mutableListOf<ASTNode>()
+    listItemNode.children.fastForEach { child ->
+        when (child.type) {
+            MarkdownElementTypes.UNORDERED_LIST,
+            MarkdownElementTypes.ORDERED_LIST -> {
+                nestedLists.add(child)
+            }
+
+            else -> {
+                directContent.add(child)
+            }
+        }
+    }
+    return directContent to nestedLists
+}
+
+@Composable
 private fun Paragraph(
     node: ASTNode,
     content: String,
-    onClickCitation: (Int) -> Unit,
+    trim: Boolean = false,
+    onClickCitation: (String) -> Unit = {},
     modifier: Modifier,
 ) {
     // dumpAst(node, content)
-    if (node.findChildOfType(MarkdownElementTypes.IMAGE) != null) {
-        Column(modifier = modifier) {
+    if (node.findChildOfTypeRecursive(MarkdownElementTypes.IMAGE, GFMElementTypes.BLOCK_MATH) != null) {
+        FlowRow(modifier = modifier) {
             node.children.fastForEach { child ->
                 MarkdownNode(
                     node = child,
@@ -541,8 +723,15 @@ private fun Paragraph(
 
     val textStyle = LocalTextStyle.current
     val density = LocalDensity.current
-    BoxWithConstraints(modifier = Modifier.padding(start = 4.dp)) {
-        val maxWidth = this.maxWidth
+    FlowRow(
+        modifier = modifier
+            .then(
+                if (node.nextSibling() != null)
+                    Modifier
+                        .padding(bottom = 4.dp)
+                else Modifier
+            )
+    ) {
         val annotatedString = remember(content) {
             buildAnnotatedString {
                 node.children.fastForEach { child ->
@@ -551,18 +740,17 @@ private fun Paragraph(
                         content = content,
                         inlineContents = inlineContents,
                         colorScheme = colorScheme,
-                        maxWidth = maxWidth,
                         onClickCitation = onClickCitation,
                         style = textStyle,
-                        density = density
+                        density = density,
+                        trim = trim,
                     )
                 }
             }
         }
         Text(
             text = annotatedString,
-            modifier = modifier,
-            style = LocalTextStyle.current,
+            modifier = Modifier,
             inlineContent = inlineContents,
             softWrap = true,
             overflow = TextOverflow.Visible
@@ -599,16 +787,13 @@ private fun TableNode(node: ASTNode, content: String, modifier: Modifier = Modif
     val columns = List(columnCount) { columnIndex ->
         ColumnDefinition<List<String>>(
             header = {
-                Text(
-                    text = if (columnIndex < headerCells.size) headerCells[columnIndex] else "",
-                    fontWeight = FontWeight.Bold
+                MarkdownBlock(
+                    content = if (columnIndex < headerCells.size) headerCells[columnIndex] else "",
                 )
             },
             cell = { rowData ->
-                Text(
-                    text = if (columnIndex < rowData.size) rowData[columnIndex] else "",
-                    softWrap = true,
-                    overflow = TextOverflow.Ellipsis
+                MarkdownBlock(
+                    content = if (columnIndex < rowData.size) rowData[columnIndex] else "",
                 )
             },
             width = ColumnWidth.Adaptive(min = 80.dp)
@@ -629,16 +814,32 @@ private fun TableNode(node: ASTNode, content: String, modifier: Modifier = Modif
 private fun AnnotatedString.Builder.appendMarkdownNodeContent(
     node: ASTNode,
     content: String,
+    trim: Boolean = false,
     inlineContents: MutableMap<String, InlineTextContent>,
     colorScheme: ColorScheme,
-    maxWidth: Dp,
     density: Density,
     style: TextStyle,
-    onClickCitation: (Int) -> Unit
+    onClickCitation: (String) -> Unit = {},
 ) {
     when {
+        node.type == MarkdownTokenTypes.BLOCK_QUOTE -> {}
+
+        node.type == GFMTokenTypes.GFM_AUTOLINK -> {
+            val link = node.getTextInNode(content)
+            withLink(LinkAnnotation.Url(link)) {
+                withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+                    append(link)
+                }
+            }
+        }
+
         node is LeafASTNode -> {
-            append(node.getTextInNode(content))
+            append(
+                node
+                    .getTextInNode(content)
+                    .unescapeHtml()
+                    .let { if (trim) it.trim() else it }
+            )
         }
 
         node.type == MarkdownElementTypes.EMPH -> {
@@ -651,7 +852,6 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
                             content = content,
                             inlineContents = inlineContents,
                             colorScheme = colorScheme,
-                            maxWidth = maxWidth,
                             density = density,
                             style = style,
                             onClickCitation = onClickCitation
@@ -661,7 +861,7 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
         }
 
         node.type == MarkdownElementTypes.STRONG -> {
-            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
                 node.children
                     .trim(MarkdownTokenTypes.EMPH, 2)
                     .fastForEach {
@@ -670,7 +870,6 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
                             content = content,
                             inlineContents = inlineContents,
                             colorScheme = colorScheme,
-                            maxWidth = maxWidth,
                             density = density,
                             style = style,
                             onClickCitation = onClickCitation
@@ -689,7 +888,6 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
                             content = content,
                             inlineContents = inlineContents,
                             colorScheme = colorScheme,
-                            maxWidth = maxWidth,
                             density = density,
                             style = style,
                             onClickCitation = onClickCitation
@@ -700,43 +898,50 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
 
         node.type == MarkdownElementTypes.INLINE_LINK -> {
             val linkDest =
-                node.findChildOfType(MarkdownElementTypes.LINK_DESTINATION)?.getTextInNode(content)
+                node.findChildOfTypeRecursive(MarkdownElementTypes.LINK_DESTINATION)?.getTextInNode(content)
                     ?: ""
             val linkText =
-                node.findChildOfType(MarkdownTokenTypes.TEXT)?.getTextInNode(content) ?: linkDest
+                node.findChildOfTypeRecursive(MarkdownElementTypes.LINK_TEXT)
+                    ?.findChildOfTypeRecursive(GFMTokenTypes.GFM_AUTOLINK, MarkdownTokenTypes.TEXT)
+                    ?.getTextInNode(content)
+                    ?: linkDest
             if (linkText == "citation") {
                 // 如果是引用，则特殊处理
-                inlineContents.putIfAbsent(
-                    "citation:$linkDest", InlineTextContent(
-                        placeholder = Placeholder(
-                            width = 1.em,
-                            height = 1.em,
-                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
-                        ),
-                        children = {
-                            Box(
-                                modifier = Modifier
-                                    .clickable {
-                                        onClickCitation(linkDest.toIntOrNull() ?: 1)
-                                        println(linkDest)
-                                    }
-                                    .fillMaxSize()
-                                    .background(colorScheme.primary.copy(0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = linkDest,
-                                    modifier = Modifier.wrapContentSize(),
-                                    style = TextStyle(
-                                        fontSize = 12.sp,
-                                        lineHeight = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                )
+                val splits = linkDest.split(":")
+                if (splits.size == 2) {
+                    val (index, id) = splits
+                    inlineContents.putIfAbsent(
+                        "citation:$linkDest", InlineTextContent(
+                            placeholder = Placeholder(
+                                width = 1.em,
+                                height = 1.em,
+                                placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                            ),
+                            children = {
+                                Box(
+                                    modifier = Modifier
+                                        .clickable {
+                                            onClickCitation(id.trim())
+                                        }
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(20))
+                                        .background(colorScheme.primary.copy(0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = index.toString(),
+                                        modifier = Modifier.wrapContentSize(),
+                                        style = TextStyle(
+                                            fontSize = 12.sp,
+                                            lineHeight = 12.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        ),
+                                    )
+                                }
                             }
-                        }
-                    ))
-                appendInlineContent("citation:$linkDest")
+                        ))
+                    appendInlineContent("citation:$linkDest")
+                }
             } else {
                 withLink(LinkAnnotation.Url(linkDest)) {
                     withStyle(
@@ -746,6 +951,19 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
                         )
                     ) {
                         append(linkText)
+                    }
+                }
+            }
+        }
+
+        node.type == MarkdownElementTypes.AUTOLINK -> {
+            val links = node.children
+                .trim(MarkdownTokenTypes.LT, 1)
+                .trim(MarkdownTokenTypes.GT, 1)
+            links.fastForEach { link ->
+                withLink(LinkAnnotation.Url(link.getTextInNode(content))) {
+                    withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+                        append(link.getTextInNode(content))
                     }
                 }
             }
@@ -777,7 +995,8 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
                 }
             }
             inlineContents.putIfAbsent(
-                formula, InlineTextContent(
+                /* key = */ formula,
+                /* value = */ InlineTextContent(
                     placeholder = Placeholder(
                         width = width,
                         height = height,
@@ -789,37 +1008,8 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
                             modifier = Modifier
                         )
                     }
-                ))
-        }
-
-        node.type == GFMElementTypes.BLOCK_MATH -> {
-            // formula as id
-            val formula = node.getTextInNode(content)
-            appendInlineContent(formula, "[Latex]")
-            val (width, height) = with(density) {
-                assumeLatexSize(
-                    latex = formula,
-                    fontSize = style.fontSize.toPx()
-                ).let {
-                    maxWidth.toSp() to it.height().toSp() * 1.2
-                }
-            }
-            inlineContents.putIfAbsent(
-                formula, InlineTextContent(
-                    placeholder = Placeholder(
-                        width = width,
-                        height = height,
-                        placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
-                    ),
-                    children = {
-                        MathBlock(
-                            latex = formula,
-                            modifier = Modifier
-                                .width(maxWidth)
-                                .height(with(density) { height.toDp() })
-                        )
-                    }
-                ))
+                )
+            )
         }
 
         // 其他类型继续递归处理
@@ -830,7 +1020,6 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
                     content = content,
                     inlineContents = inlineContents,
                     colorScheme = colorScheme,
-                    maxWidth = maxWidth,
                     density = density,
                     style = style,
                     onClickCitation = onClickCitation
@@ -873,10 +1062,10 @@ private fun ASTNode.nextSibling(): ASTNode? {
     return null
 }
 
-private fun ASTNode.findChildOfType(vararg types: IElementType): ASTNode? {
+private fun ASTNode.findChildOfTypeRecursive(vararg types: IElementType): ASTNode? {
     if (this.type in types) return this
     for (child in children) {
-        val result = child.findChildOfType(*types)
+        val result = child.findChildOfTypeRecursive(*types)
         if (result != null) return result
     }
     return null

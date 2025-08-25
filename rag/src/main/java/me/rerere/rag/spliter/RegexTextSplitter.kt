@@ -24,7 +24,7 @@ class RegexTextSplitter(
         val regex = Regex(pattern)
         val matches = regex.findAll(text)
         val splitPoints = matches.map { it.range.first }.toList()
-        
+
         // 如果没有匹配项，使用整个文本作为一个块
         if (splitPoints.isEmpty()) {
             return listOf(text)
@@ -36,7 +36,7 @@ class RegexTextSplitter(
 
         while (currentChunkStart < text.length) {
             var currentChunkEnd = currentChunkStart + chunkSize
-            
+
             // 确保不超出文本范围
             if (currentChunkEnd > text.length) {
                 currentChunkEnd = text.length
@@ -48,10 +48,10 @@ class RegexTextSplitter(
 
             // 添加块
             chunks.add(text.substring(currentChunkStart, currentChunkEnd))
-            
+
             // 移动到下一个块的起点，考虑重叠
             currentChunkStart += (chunkSize - chunkOverlap).coerceAtLeast(1)
-            
+
             // 确保不超出文本范围
             if (currentChunkStart >= text.length) {
                 break
@@ -68,4 +68,4 @@ class RegexTextSplitter(
             "chunkOverlap" to chunkOverlap
         )
     }
-} 
+}

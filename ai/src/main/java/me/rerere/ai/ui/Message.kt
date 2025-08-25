@@ -1,16 +1,19 @@
 package me.rerere.ai.ui
 
-import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.TokenUsage
 import me.rerere.ai.provider.Model
-import me.rerere.search.SearchResult
+import me.rerere.ai.util.json
+import java.util.Locale
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 // 公共消息抽象, 具体的Provider实现会转换为API接口需要的DTO
@@ -23,12 +26,14 @@ data class UIMessage(
     val createdAt: LocalDateTime = Clock.System.now()
         .toLocalDateTime(TimeZone.currentSystemDefault()),
     val modelId: Uuid? = null,
+    val usage: TokenUsage? = null,
+    val translation: String? = null
 ) {
     private fun appendChunk(chunk: MessageChunk): UIMessage {
         val choice = chunk.choices.getOrNull(0)
         return choice?.delta?.let { delta ->
             // Handle Parts
-            val newParts = delta.parts.fold(parts) { acc, deltaPart ->
+            var newParts = delta.parts.fold(parts) { acc, deltaPart ->
                 when (deltaPart) {
                     is UIMessagePart.Text -> {
                         val existingTextPart =
@@ -40,7 +45,7 @@ data class UIMessage(
                                 } else part
                             }
                         } else {
-                            acc + UIMessagePart.Text(deltaPart.text)
+                            acc + deltaPart
                         }
                     }
 
@@ -68,29 +73,20 @@ data class UIMessage(
                         if (existingReasoningPart != null) {
                             acc.map { part ->
                                 if (part is UIMessagePart.Reasoning) {
-                                    UIMessagePart.Reasoning(existingReasoningPart.reasoning + deltaPart.reasoning)
+                                    UIMessagePart.Reasoning(
+                                        reasoning = existingReasoningPart.reasoning + deltaPart.reasoning,
+                                        createdAt = existingReasoningPart.createdAt,
+                                        finishedAt = null,
+                                    ).also {
+                                        if (deltaPart.metadata != null) {
+                                            it.metadata = deltaPart.metadata // 更新metadata
+                                            println("更新metadata: ${json.encodeToString(deltaPart)}")
+                                        }
+                                    }
                                 } else part
                             }
                         } else {
-                            acc + UIMessagePart.Reasoning(deltaPart.reasoning)
-                        }
-                    }
-
-                    is UIMessagePart.Search -> {
-                        val existingSearchPart =
-                            acc.find { it is UIMessagePart.Search } as? UIMessagePart.Search
-                        if (existingSearchPart != null) {
-                            acc.map { part ->
-                                if (part is UIMessagePart.Search) {
-                                    UIMessagePart.Search(
-                                        existingSearchPart.search.copy(
-                                            items = existingSearchPart.search.items + deltaPart.search.items
-                                        )
-                                    )
-                                } else part
-                            }
-                        } else {
-                            acc + UIMessagePart.Search(deltaPart.search)
+                            acc + deltaPart
                         }
                     }
 
@@ -140,6 +136,17 @@ data class UIMessage(
                     }
                 }
             }
+            // Handle Reasoning End
+            if (parts.filterIsInstance<UIMessagePart.Reasoning>()
+                    .isNotEmpty() && delta.parts.filterIsInstance<UIMessagePart.Reasoning>()
+                    .isEmpty()
+            ) {
+                newParts = newParts.map { part ->
+                    if (part is UIMessagePart.Reasoning && part.finishedAt == null) {
+                        part.copy(finishedAt = Clock.System.now())
+                    } else part
+                }
+            }
             // Handle annotations
             val newAnnotations = delta.annotations.ifEmpty {
                 annotations
@@ -171,11 +178,11 @@ data class UIMessage(
     fun getToolResults() = parts.filterIsInstance<UIMessagePart.ToolResult>()
 
     fun isValidToUpload() = parts.any {
-        it !is UIMessagePart.Search && it !is UIMessagePart.Reasoning
+        it !is UIMessagePart.Reasoning
     }
 
     fun isValidToShowActions() = parts.any {
-        (it is UIMessagePart.Text && it.text.isNotBlank()) || it is UIMessagePart.Image
+        (it is UIMessagePart.Text && it.text.isNotBlank()) || it is UIMessagePart.Image || it is UIMessagePart.Document
     }
 
     inline fun <reified P : UIMessagePart> hasPart(): Boolean {
@@ -196,6 +203,11 @@ data class UIMessage(
 
         fun user(prompt: String) = UIMessage(
             role = MessageRole.USER,
+            parts = listOf(UIMessagePart.Text(prompt))
+        )
+
+        fun assistant(prompt: String) = UIMessage(
+            role = MessageRole.ASSISTANT,
             parts = listOf(UIMessagePart.Text(prompt))
         )
     }
@@ -224,7 +236,7 @@ fun List<UIMessage>.handleMessageChunk(chunk: MessageChunk, model: Model? = null
 }
 
 /**
- * 判断这个消息是否有有任何可编辑的内容
+ * 判断这个消息是否有有任何内容
  * 例如，文本，图片...
  */
 fun List<UIMessagePart>.isEmptyInputMessage(): Boolean {
@@ -233,6 +245,7 @@ fun List<UIMessagePart>.isEmptyInputMessage(): Boolean {
         when (message) {
             is UIMessagePart.Text -> message.text.isBlank()
             is UIMessagePart.Image -> message.url.isBlank()
+            is UIMessagePart.Document -> message.url.isBlank()
             else -> true
         }
     }
@@ -247,60 +260,109 @@ fun List<UIMessagePart>.isEmptyUIMessage(): Boolean {
         when (message) {
             is UIMessagePart.Text -> message.text.isBlank()
             is UIMessagePart.Image -> message.url.isBlank()
+            is UIMessagePart.Document -> message.url.isBlank()
             is UIMessagePart.Reasoning -> message.reasoning.isBlank()
             else -> true
         }
     }
 }
 
-/**
- * 将消息内的Search part转为文本prompt
- *
- * @return 搜索结果文本
- */
-fun List<UIMessagePart>.searchTextContent(): String {
-    return buildString {
-        for (part in this@searchTextContent) {
-            when (part) {
-                is UIMessagePart.Search -> {
-                    part.search.items.forEachIndexed { index, item ->
-                        append("<search_item>\n")
-                        append("<index>${index + 1}</index>\n")
-                        append("<title>${item.title}</title>\n")
-                        append("<content>${item.text}</content>\n")
-                        append("<url>${item.url}</url>\n")
-                        append("</search_item>\n")
-                    }
-                }
+fun List<UIMessage>.truncate(index: Int): List<UIMessage> {
+    if (index < 0 || index > this.lastIndex) return this
+    return this.subList(index, this.size)
+}
 
-                else -> {}
+fun List<UIMessage>.limitContext(size: Int): List<UIMessage> {
+    if (size <= 0 || this.size <= size) return this
+
+    val startIndex = this.size - size
+    var adjustedStartIndex = startIndex
+
+    // 循环往前查找，直到满足所有依赖条件
+    var needsAdjustment = true
+    val visitedIndices = mutableSetOf<Int>()
+
+    while (needsAdjustment && adjustedStartIndex > 0) {
+        needsAdjustment = false
+
+        // 防止无限循环
+        if (adjustedStartIndex in visitedIndices) break
+        visitedIndices.add(adjustedStartIndex)
+
+        val currentMessage = this[adjustedStartIndex]
+
+        // 如果当前消息包含tool result，往前查找对应的tool call
+        if (currentMessage.getToolResults().isNotEmpty()) {
+            for (i in adjustedStartIndex - 1 downTo 0) {
+                if (this[i].getToolCalls().isNotEmpty()) {
+                    adjustedStartIndex = i
+                    needsAdjustment = true
+                    break
+                }
+            }
+        }
+
+        // 如果当前消息包含tool call，往前查找对应的用户消息
+        if (currentMessage.getToolCalls().isNotEmpty()) {
+            for (i in adjustedStartIndex - 1 downTo 0) {
+                if (this[i].role == MessageRole.USER) {
+                    adjustedStartIndex = i
+                    needsAdjustment = true
+                    break
+                }
             }
         }
     }
+
+    return this.subList(adjustedStartIndex, this.size)
 }
 
 @Serializable
 sealed class UIMessagePart {
     abstract val priority: Int
+    abstract val metadata: JsonObject?
 
     @Serializable
-    data class Text(val text: String) : UIMessagePart() {
+    data class Text(
+        val text: String,
+        override var metadata: JsonObject? = null
+    ) : UIMessagePart() {
         override val priority: Int = 0
     }
 
     @Serializable
-    data class Image(val url: String) : UIMessagePart() {
+    data class Image(
+        val url: String,
+        override var metadata: JsonObject? = null
+    ) : UIMessagePart() {
         override val priority: Int = 1
     }
 
     @Serializable
-    data class Reasoning(val reasoning: String) : UIMessagePart() {
-        override val priority: Int = -1
+    data class Document(
+        val url: String,
+        val fileName: String,
+        val mime: String = "text/*",
+        override var metadata: JsonObject? = null
+    ) : UIMessagePart() {
+        override val priority: Int = 1
     }
 
     @Serializable
-    data class Search(val search: SearchResult) : UIMessagePart() {
-        override val priority: Int = -2
+    data class Reasoning(
+        val reasoning: String,
+        val createdAt: Instant = Clock.System.now(),
+        val finishedAt: Instant? = Clock.System.now(),
+        override var metadata: JsonObject? = null
+    ) : UIMessagePart() {
+        override val priority: Int = -1
+    }
+
+    @Deprecated("Deprecated")
+    @Serializable
+    data object Search : UIMessagePart() {
+        override val priority: Int = 0
+        override var metadata: JsonObject? = null
     }
 
     @Serializable
@@ -308,10 +370,11 @@ sealed class UIMessagePart {
         val toolCallId: String,
         val toolName: String,
         val arguments: String,
+        override var metadata: JsonObject? = null
     ) : UIMessagePart() {
         fun merge(other: ToolCall): ToolCall {
             return ToolCall(
-                toolCallId = toolCallId + other.toolCallId,
+                toolCallId = toolCallId,
                 toolName = toolName + other.toolName,
                 arguments = arguments + other.arguments
             )
@@ -326,6 +389,7 @@ sealed class UIMessagePart {
         val toolName: String,
         val content: JsonElement,
         val arguments: JsonElement,
+        override var metadata: JsonObject? = null
     ) : UIMessagePart() {
         override val priority: Int = 0
     }
@@ -333,6 +397,26 @@ sealed class UIMessagePart {
 
 fun List<UIMessagePart>.toSortedMessageParts(): List<UIMessagePart> {
     return sortedBy { it.priority }
+}
+
+fun UIMessage.finishReasoning(): UIMessage {
+    return copy(
+        parts = parts.map { part ->
+            when (part) {
+                is UIMessagePart.Reasoning -> {
+                    if (part.finishedAt == null) {
+                        part.copy(
+                            finishedAt = Clock.System.now()
+                        )
+                    } else {
+                        part
+                    }
+                }
+
+                else -> part
+            }
+        }
+    )
 }
 
 @Serializable

@@ -300,65 +300,65 @@ private fun buildMermaidHtml(
               mermaid.initialize({
                     startOnLoad: false,
                     theme: '${theme.value}',
-                    themeVariables: {                        
+                    themeVariables: {
                         primaryColor: '${primaryColor}',
                         primaryTextColor: '${onPrimary}',
                         primaryBorderColor: '${primaryColor}',
-                        
+
                         secondaryColor: '${secondaryColor}',
                         secondaryTextColor: '${onSecondary}',
                         secondaryBorderColor: '${secondaryColor}',
-                        
+
                         tertiaryColor: '${tertiaryColor}',
                         tertiaryTextColor: '${onTertiary}',
                         tertiaryBorderColor: '${tertiaryColor}',
-                        
+
                         background: '${background}',
                         mainBkg: '${primaryColor}',
                         secondBkg: '${secondaryColor}',
-                        
+
                         lineColor: '${onBackground}',
                         textColor: '${onBackground}',
-                        
+
                         nodeBkg: '${surface}',
                         nodeBorder: '${primaryColor}',
                         clusterBkg: '${surface}',
                         clusterBorder: '${primaryColor}',
-                        
+
                         // 序列图变量
                         actorBorder: '${primaryColor}',
                         actorBkg: '${surface}',
                         actorTextColor: '${onBackground}',
                         actorLineColor: '${primaryColor}',
-                        
+
                         // 甘特图变量
                         taskBorderColor: '${primaryColor}',
                         taskBkgColor: '${primaryColor}',
                         taskTextLightColor: '${onPrimary}',
                         taskTextDarkColor: '${onBackground}',
-                        
+
                         // 状态图变量
                         labelColor: '${onBackground}',
                         errorBkgColor: '${errorColor}',
                         errorTextColor: '${onErrorColor}'
                     }
               });
-              
+
               function calculateAndSendHeight() {
                     // 获取实际内容高度，考虑缩放因素
                     const contentElement = document.querySelector('.mermaid');
                     const contentBox = contentElement.getBoundingClientRect();
                     // 添加内边距和一点额外空间以确保完整显示
                     const height = Math.ceil(contentBox.height) + 20;
-                    
+
                     // 处理移动设备的初始缩放
                     const visualViewportScale = window.visualViewport ? window.visualViewport.scale : 1;
                     console.warn('visualViewportScale', visualViewportScale)
                     const adjustedHeight = Math.ceil(height * visualViewportScale);
-                    
+
                     AndroidInterface.updateHeight(adjustedHeight);
               }
-              
+
               mermaid.run({
                     querySelector: '.mermaid'
               }).catch((err) => {
@@ -366,10 +366,10 @@ private fun buildMermaidHtml(
               }).then(() => {
                 calculateAndSendHeight();
               });
-              
+
               // 监听窗口大小变化以重新计算高度
               window.addEventListener('resize', calculateAndSendHeight);
-              
+
               // 导出SVG为PNG图像
               window.exportSvgToPng = function() {
                 try {
@@ -406,7 +406,7 @@ private fun buildMermaidHtml(
 
                         // Draw the SVG image onto the canvas
                         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        
+
                         // Draw watermark
                         ctx.font = '14px Arial';
                         ctx.fillStyle = '${onBackground}';

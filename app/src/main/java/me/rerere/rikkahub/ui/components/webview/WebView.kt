@@ -177,7 +177,7 @@ sealed class WebContent {
 @Stable // Mark as Stable for better Compose performance
 class WebViewState(
     initialContent: WebContent = WebContent.NavigatorOnly,
-    val interfaces: Map<String, Any>  = emptyMap(),
+    val interfaces: Map<String, Any> = emptyMap(),
     val settings: WebSettings.() -> Unit = {}
 ) {
     // --- Content State ---

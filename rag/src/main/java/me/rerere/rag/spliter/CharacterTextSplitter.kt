@@ -34,7 +34,7 @@ class CharacterTextSplitter(
                     chunks.add(currentChunk.toString())
                     currentChunk = StringBuilder()
                 }
-                
+
                 // 分割长文本
                 var i = 0
                 while (i < split.length) {
@@ -70,4 +70,4 @@ class CharacterTextSplitter(
             "separator" to separator
         )
     }
-} 
+}

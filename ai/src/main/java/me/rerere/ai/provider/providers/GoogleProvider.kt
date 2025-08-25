@@ -13,31 +13,45 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import me.rerere.ai.core.MessageRole
-import me.rerere.ai.core.Schema
 import me.rerere.ai.core.TokenUsage
+import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.Modality
+import me.rerere.ai.provider.ImageGenerationParams
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ModelAbility
 import me.rerere.ai.provider.ModelType
 import me.rerere.ai.provider.Provider
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.TextGenerationParams
+import me.rerere.ai.provider.providers.vertex.ServiceAccountTokenProvider
+import me.rerere.ai.ui.ImageAspectRatio
+import me.rerere.ai.ui.ImageGenerationResult
+import me.rerere.ai.ui.ImageGenerationItem
 import me.rerere.ai.ui.MessageChunk
 import me.rerere.ai.ui.UIMessage
+import me.rerere.ai.ui.UIMessageAnnotation
 import me.rerere.ai.ui.UIMessageChoice
 import me.rerere.ai.ui.UIMessagePart
+import me.rerere.ai.util.KeyRoulette
 import me.rerere.ai.util.await
+import me.rerere.ai.util.configureClientWithProxy
+import me.rerere.ai.util.configureReferHeaders
 import me.rerere.ai.util.encodeBase64
 import me.rerere.ai.util.json
 import me.rerere.ai.util.mergeCustomBody
+import me.rerere.ai.util.removeElements
+import me.rerere.ai.util.stringSafe
 import me.rerere.ai.util.toHeaders
+import me.rerere.common.http.jsonPrimitiveOrNull
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -45,87 +59,88 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okhttp3.logging.HttpLoggingInterceptor
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
-import java.util.concurrent.TimeUnit
+import org.apache.commons.text.StringEscapeUtils
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 private const val TAG = "GoogleProvider"
 
-object GoogleProvider : Provider<ProviderSetting.Google> {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(120, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
-        .writeTimeout(120, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
-        .addInterceptor(HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.HEADERS
-        })
-        .build()
+class GoogleProvider(private val client: OkHttpClient) : Provider<ProviderSetting.Google> {
+    private val keyRoulette = KeyRoulette.default()
+    private val serviceAccountTokenProvider by lazy {
+        ServiceAccountTokenProvider(client)
+    }
 
     private fun buildUrl(providerSetting: ProviderSetting.Google, path: String): HttpUrl {
         return if (!providerSetting.vertexAI) {
+            val key = keyRoulette.next(providerSetting.apiKey)
             "${providerSetting.baseUrl}/$path".toHttpUrl()
                 .newBuilder()
-                .addQueryParameter("key", providerSetting.apiKey)
+                .addQueryParameter("key", key)
                 .build()
         } else {
-            "https://${providerSetting.location}-aiplatform.googleapis.com/v1/projects/${providerSetting.projectId}/locations/${providerSetting.location}/$path".toHttpUrl()
+            "https://aiplatform.googleapis.com/v1/projects/${providerSetting.projectId}/locations/${providerSetting.location}/$path".toHttpUrl()
         }
     }
 
-    private fun transformRequest(
+    private suspend fun transformRequest(
         providerSetting: ProviderSetting.Google,
         request: Request
     ): Request {
         return if (providerSetting.vertexAI) {
+            val accessToken = serviceAccountTokenProvider.fetchAccessToken(
+                serviceAccountEmail = providerSetting.serviceAccountEmail.trim(),
+                privateKeyPem = StringEscapeUtils.unescapeJson(providerSetting.privateKey.trim()),
+            )
             request.newBuilder()
-                .addHeader("Authorization", "Bearer ${providerSetting.apiKey}")
+                .addHeader("Authorization", "Bearer $accessToken")
                 .build()
         } else {
             request.newBuilder().build()
         }
     }
 
-    override suspend fun listModels(providerSetting: ProviderSetting.Google): List<Model> {
-        val url = buildUrl(providerSetting = providerSetting, path = "models")
-        val request = transformRequest(
-            providerSetting = providerSetting,
-            request = Request.Builder()
-                .url(url)
-                .get()
-                .build()
-        )
-        val response = client.newCall(request).await()
-        return if (response.isSuccessful) {
-            val body = response.body?.string() ?: error("empty body")
-            Log.d(TAG, "listModels: $body")
-            val bodyObject = json.parseToJsonElement(body).jsonObject
-            val models = bodyObject["models"]?.jsonArray ?: return emptyList()
+    override suspend fun listModels(providerSetting: ProviderSetting.Google): List<Model> =
+        withContext(Dispatchers.IO) {
+            val url = buildUrl(providerSetting = providerSetting, path = "models")
+            val request = transformRequest(
+                providerSetting = providerSetting,
+                request = Request.Builder()
+                    .url(url)
+                    .get()
+                    .build()
+            )
+            val response = client.configureClientWithProxy(providerSetting.proxy).newCall(request).await()
+            if (response.isSuccessful) {
+                val body = response.body?.string() ?: error("empty body")
+                Log.d(TAG, "listModels: $body")
+                val bodyObject = json.parseToJsonElement(body).jsonObject
+                val models = bodyObject["models"]?.jsonArray ?: return@withContext emptyList()
 
-            models.mapNotNull {
-                val modelObject = it.jsonObject
+                models.mapNotNull {
+                    val modelObject = it.jsonObject
 
-                // 忽略非chat/embedding模型
-                val supportedGenerationMethods =
-                    modelObject["supportedGenerationMethods"]!!.jsonArray
-                        .map { method -> method.jsonPrimitive.content }
-                if ("generateContent" !in supportedGenerationMethods && "embedContent" !in supportedGenerationMethods) {
-                    return@mapNotNull null
+                    // 忽略非chat/embedding模型
+                    val supportedGenerationMethods =
+                        modelObject["supportedGenerationMethods"]!!.jsonArray
+                            .map { method -> method.jsonPrimitive.content }
+                    if ("generateContent" !in supportedGenerationMethods && "embedContent" !in supportedGenerationMethods) {
+                        return@mapNotNull null
+                    }
+
+                    Model(
+                        modelId = modelObject["name"]!!.jsonPrimitive.content.substringAfter("/"),
+                        displayName = modelObject["displayName"]!!.jsonPrimitive.content,
+                        type = if ("generateContent" in supportedGenerationMethods) ModelType.CHAT else ModelType.EMBEDDING,
+                    )
                 }
-
-                Model(
-                    modelId = modelObject["name"]!!.jsonPrimitive.content.substringAfter("/"),
-                    displayName = modelObject["displayName"]!!.jsonPrimitive.content,
-                    type = if ("generateContent" in supportedGenerationMethods) ModelType.CHAT else ModelType.EMBEDDING,
-                )
+            } else {
+                emptyList()
             }
-        } else {
-            emptyList()
         }
-    }
 
     override suspend fun generateText(
         providerSetting: ProviderSetting.Google,
@@ -151,10 +166,11 @@ object GoogleProvider : Provider<ProviderSetting.Google> {
                 .post(
                     json.encodeToString(requestBody).toRequestBody("application/json".toMediaType())
                 )
+                .configureReferHeaders(providerSetting.baseUrl)
                 .build()
         )
 
-        val response = client.newCall(request).await()
+        val response = client.configureClientWithProxy(providerSetting.proxy).newCall(request).await()
         if (!response.isSuccessful) {
             throw Exception("Failed to get response: ${response.code} ${response.body?.string()}")
         }
@@ -206,6 +222,7 @@ object GoogleProvider : Provider<ProviderSetting.Google> {
                 .post(
                     json.encodeToString(requestBody).toRequestBody("application/json".toMediaType())
                 )
+                .configureReferHeaders(providerSetting.baseUrl)
                 .build()
         )
 
@@ -218,13 +235,7 @@ object GoogleProvider : Provider<ProviderSetting.Google> {
                 type: String?,
                 data: String
             ) {
-                println("[onEvent] $data")
-                if (data == "[DONE]") {
-                    println("[onEvent] (done) 结束流: $data")
-                    eventSource.cancel()
-                    close()
-                    return
-                }
+                Log.i(TAG, "onEvent: $data")
 
                 try {
                     val jsonData = json.parseToJsonElement(data).jsonObject
@@ -237,22 +248,23 @@ object GoogleProvider : Provider<ProviderSetting.Google> {
                         choices = candidates.mapIndexed { index, candidate ->
                             val candidateObj = candidate.jsonObject
                             val content = candidateObj["content"]?.jsonObject
+                            val groundingMetadata = candidateObj["groundingMetadata"]?.jsonObject
                             val finishReason =
                                 candidateObj["finishReason"]?.jsonPrimitive?.contentOrNull
 
+                            val message = content?.let {
+                                parseMessage(buildJsonObject {
+                                    put("role", JsonPrimitive("model"))
+                                    put("content", it)
+                                    groundingMetadata?.let { groundingMetadata ->
+                                        put("groundingMetadata", groundingMetadata)
+                                    }
+                                })
+                            }
+
                             UIMessageChoice(
                                 index = index,
-                                delta = content?.let {
-                                    parseMessage(
-                                        JsonObject(
-                                            mapOf(
-                                                "role" to JsonPrimitive(
-                                                    "model"
-                                                ), "content" to it
-                                            )
-                                        )
-                                    )
-                                },
+                                delta = message,
                                 message = null,
                                 finishReason = finishReason
                             )
@@ -279,7 +291,7 @@ object GoogleProvider : Provider<ProviderSetting.Google> {
 
                 try {
                     if (t == null && response != null) {
-                        val bodyStr = response.body?.string()
+                        val bodyStr = response.body.stringSafe()
                         if (!bodyStr.isNullOrEmpty()) {
                             val bodyElement = json.parseToJsonElement(bodyStr)
                             println(bodyElement)
@@ -295,6 +307,7 @@ object GoogleProvider : Provider<ProviderSetting.Google> {
                     }
                 } catch (e: Throwable) {
                     e.printStackTrace()
+                    exception = e
                 } finally {
                     close(exception ?: Exception("Stream failed"))
                 }
@@ -306,7 +319,9 @@ object GoogleProvider : Provider<ProviderSetting.Google> {
             }
         }
 
-        val eventSource = EventSources.createFactory(client).newEventSource(request, listener)
+        val eventSource =
+            EventSources.createFactory(client.configureClientWithProxy(providerSetting.proxy))
+                .newEventSource(request, listener)
 
         awaitClose {
             println("[awaitClose] 关闭eventSource")
@@ -337,44 +352,31 @@ object GoogleProvider : Provider<ProviderSetting.Google> {
         put("generationConfig", buildJsonObject {
             if (params.temperature != null) put("temperature", params.temperature)
             if (params.topP != null) put("topP", params.topP)
+            if (params.maxTokens != null) put("maxOutputTokens", params.maxTokens)
             if (params.model.outputModalities.contains(Modality.IMAGE)) {
                 put("responseModalities", buildJsonArray {
                     add(JsonPrimitive("TEXT"))
                     add(JsonPrimitive("IMAGE"))
                 })
             }
-            if(params.model.abilities.contains(ModelAbility.REASONING)) {
+            if (params.model.abilities.contains(ModelAbility.REASONING)) {
                 put("thinkingConfig", buildJsonObject {
-                    if(params.thinkingBudget != null) {
-                        put("thinkingBudget", params.thinkingBudget)
-                    }
-                    if(params.thinkingBudget == null || params.thinkingBudget > 0) {
-                        put("includeThoughts", true)
+                    put("includeThoughts", true)
+
+                    val isGeminiPro =
+                        params.model.modelId.contains(Regex("2\\.5.*pro", RegexOption.IGNORE_CASE))
+
+                    when (params.thinkingBudget) {
+                        null, -1 -> {}
+                        0 -> {
+                            if (!isGeminiPro) put("thinkingBudget", 0) // disable thinking if not gemini pro
+                        }
+
+                        else -> put("thinkingBudget", params.thinkingBudget)
                     }
                 })
             }
         })
-
-
-        // Safety
-//        put("safetySettings", buildJsonArray {
-//            add(buildJsonObject {
-//                put("category", "HARM_CATEGORY_SEXUALLY_EXPLICIT")
-//                put("threshold", "BLOCK_NONE")
-//            })
-//            add(buildJsonObject {
-//                put("category", "HARM_CATEGORY_HATE_SPEECH")
-//                put("threshold", "BLOCK_NONE")
-//            })
-//            add(buildJsonObject {
-//                put("category", "HARM_CATEGORY_HATE_SPEECH")
-//                put("threshold", "BLOCK_NONE")
-//            })
-//            add(buildJsonObject {
-//                put("category", "HARM_CATEGORY_DANGEROUS_CONTENT")
-//                put("threshold", "BLOCK_NONE")
-//            })
-//        })
 
         // Contents (user messages)
         put(
@@ -392,16 +394,67 @@ object GoogleProvider : Provider<ProviderSetting.Google> {
                                 put("name", JsonPrimitive(tool.name))
                                 put("description", JsonPrimitive(tool.description))
                                 put(
-                                    "parameters",
-                                    json.encodeToJsonElement(
-                                        Schema.serializer(),
-                                        tool.parameters
-                                    )
+                                    key = "parameters",
+                                    element = json.encodeToJsonElement(tool.parameters)
+                                        .removeElements(
+                                            listOf(
+                                                "const",
+                                                "exclusiveMaximum",
+                                                "exclusiveMinimum",
+                                                "format",
+                                                "additionalProperties"
+                                            )
+                                        )
                                 )
                             })
                         }
                     })
                 })
+            })
+        }
+        // Model BuiltIn Tools
+        // 目前不能和工具调用兼容
+        if (params.model.tools.isNotEmpty()) {
+            put("tools", buildJsonArray {
+                params.model.tools.forEach { builtInTool ->
+                    when (builtInTool) {
+                        BuiltInTools.Search -> {
+                            add(buildJsonObject {
+                                put("google_search", buildJsonObject {})
+                            })
+                        }
+
+                        BuiltInTools.UrlContext -> {
+                            add(buildJsonObject {
+                                put("url_context", buildJsonObject {})
+                            })
+                        }
+                    }
+                }
+            })
+        }
+
+        // Safety Settings
+        putJsonArray("safetySettings") {
+            add(buildJsonObject {
+                put("category", "HARM_CATEGORY_HARASSMENT")
+                put("threshold", "OFF")
+            })
+            add(buildJsonObject {
+                put("category", "HARM_CATEGORY_HATE_SPEECH")
+                put("threshold", "OFF")
+            })
+            add(buildJsonObject {
+                put("category", "HARM_CATEGORY_SEXUALLY_EXPLICIT")
+                put("threshold", "OFF")
+            })
+            add(buildJsonObject {
+                put("category", "HARM_CATEGORY_DANGEROUS_CONTENT")
+                put("threshold", "OFF")
+            })
+            add(buildJsonObject {
+                put("category", "HARM_CATEGORY_CIVIC_INTEGRITY")
+                put("threshold", "OFF")
             })
         }
     }.mergeCustomBody(params.customBody)
@@ -433,10 +486,31 @@ object GoogleProvider : Provider<ProviderSetting.Google> {
             parseMessagePart(part.jsonObject)
         } ?: emptyList()
 
+        val groundingMetadata = message["groundingMetadata"]?.jsonObject
+        Log.i(TAG, "parseMessage: $groundingMetadata")
+        val annotations = parseSearchGroundingMetadata(groundingMetadata)
+
         return UIMessage(
             role = role,
-            parts = parts
+            parts = parts,
+            annotations = annotations
         )
+    }
+
+    private fun parseSearchGroundingMetadata(jsonObject: JsonObject?): List<UIMessageAnnotation> {
+        if (jsonObject == null) return emptyList()
+        val groundingChunks = jsonObject["groundingChunks"]?.jsonArray ?: emptyList()
+        val chunks = groundingChunks.mapNotNull { chunk ->
+            val web = chunk.jsonObject["web"]?.jsonObject ?: return@mapNotNull null
+            val uri = web["uri"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            val title = web["title"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            UIMessageAnnotation.UrlCitation(
+                title = title,
+                url = uri
+            )
+        }
+        Log.i(TAG, "parseSearchGroundingMetadata: $chunks")
+        return chunks
     }
 
     private fun parseMessagePart(jsonObject: JsonObject): UIMessagePart {
@@ -444,7 +518,11 @@ object GoogleProvider : Provider<ProviderSetting.Google> {
             jsonObject.containsKey("text") -> {
                 val thought = jsonObject["thought"]?.jsonPrimitive?.booleanOrNull ?: false
                 val text = jsonObject["text"]?.jsonPrimitive?.content ?: ""
-                if(thought) UIMessagePart.Reasoning(text) else UIMessagePart.Text(text)
+                if (thought) UIMessagePart.Reasoning(
+                    reasoning = text,
+                    createdAt = Clock.System.now(),
+                    finishedAt = null
+                ) else UIMessagePart.Text(text)
             }
 
             jsonObject.containsKey("functionCall") -> {
@@ -531,10 +609,85 @@ object GoogleProvider : Provider<ProviderSetting.Google> {
         if (jsonObject == null) {
             return null
         }
+        val promptTokens = jsonObject["promptTokenCount"]?.jsonPrimitiveOrNull?.intOrNull ?: 0
+        val thoughtTokens = jsonObject["thoughtsTokenCount"]?.jsonPrimitiveOrNull?.intOrNull ?: 0
+        val cachedTokens = jsonObject["cachedContentTokenCount"]?.jsonPrimitiveOrNull?.intOrNull ?: 0
+        val candidatesTokens = jsonObject["candidatesTokenCount"]?.jsonPrimitiveOrNull?.intOrNull ?: 0
+        val totalTokens = jsonObject["totalTokenCount"]?.jsonPrimitiveOrNull?.intOrNull ?: 0
         return TokenUsage(
-            promptTokens = jsonObject["promptTokenCount"]?.jsonPrimitive?.intOrNull ?: 0,
-            completionTokens = jsonObject["candidatesTokenCount"]?.jsonPrimitive?.intOrNull ?: 0,
-            totalTokens = jsonObject["totalTokenCount"]?.jsonPrimitive?.intOrNull ?: 0
+            promptTokens = promptTokens,
+            completionTokens = candidatesTokens + thoughtTokens,
+            totalTokens = totalTokens,
+            cachedTokens = cachedTokens
         )
+    }
+
+    override suspend fun generateImage(
+        providerSetting: ProviderSetting,
+        params: ImageGenerationParams
+    ): ImageGenerationResult = withContext(Dispatchers.IO) {
+        require(providerSetting is ProviderSetting.Google) {
+            "Expected Google provider setting"
+        }
+
+        val requestBody = buildJsonObject {
+            putJsonArray("instances") {
+                add(buildJsonObject {
+                    put("prompt", params.prompt)
+                })
+            }
+            putJsonObject("parameters") {
+                put("sampleCount", params.numOfImages)
+                put("aspectRatio", when(params.aspectRatio) {
+                    ImageAspectRatio.SQUARE -> "1:1"
+                    ImageAspectRatio.LANDSCAPE -> "16:9"
+                    ImageAspectRatio.PORTRAIT -> "9:16"
+                })
+            }
+        }
+
+        val url = buildUrl(
+            providerSetting = providerSetting,
+            path = if (providerSetting.vertexAI) {
+                "publishers/google/models/${params.model.modelId}:predict"
+            } else {
+                "models/${params.model.modelId}:predict"
+            }
+        )
+
+        val request = transformRequest(
+            providerSetting = providerSetting,
+            request = Request.Builder()
+                .url(url)
+                .post(
+                    json.encodeToString(requestBody).toRequestBody("application/json".toMediaType())
+                )
+                .configureReferHeaders(providerSetting.baseUrl)
+                .build()
+        )
+
+        val response = client.configureClientWithProxy(providerSetting.proxy).newCall(request).await()
+        if (!response.isSuccessful) {
+            error("Failed to generate image: ${response.code} ${response.body.string()}")
+        }
+
+        val bodyStr = response.body.string()
+        val bodyJson = json.parseToJsonElement(bodyStr).jsonObject
+
+        val predictions =  bodyJson["predictions"]?.jsonArray ?: error("No predictions in response")
+
+        val items = predictions.mapNotNull { prediction ->
+            val predictionObj = prediction.jsonObject
+            val bytesBase64Encoded = predictionObj["bytesBase64Encoded"]?.jsonPrimitive?.contentOrNull
+
+            if (bytesBase64Encoded != null) {
+                ImageGenerationItem(
+                    data = bytesBase64Encoded,
+                    mimeType = "image/png"
+                )
+            } else null
+        }
+
+        ImageGenerationResult(items = items)
     }
 }

@@ -36,7 +36,7 @@ class RAG private constructor(
     fun close() {
         db.close()
     }
-    
+
     /**
      * RAG系统构建器类
      */
@@ -44,7 +44,7 @@ class RAG private constructor(
         private var textSplitter: TextSplitter? = null
         private var db: VectorDatabase? = null
         private var embeddingProvider: EmbeddingProvider? = null
-        
+
         /**
          * 设置文本分割器
          */
@@ -52,7 +52,7 @@ class RAG private constructor(
             this.textSplitter = splitter
             return this
         }
-        
+
         /**
          * 设置向量数据库
          */
@@ -60,7 +60,7 @@ class RAG private constructor(
             this.db = database
             return this
         }
-        
+
         /**
          * 设置向量嵌入提供者
          */
@@ -68,7 +68,7 @@ class RAG private constructor(
             this.embeddingProvider = provider
             return this
         }
-        
+
         /**
          * 构建RAG实例
          * @throws IllegalStateException 如果缺少必要组件
@@ -76,12 +76,13 @@ class RAG private constructor(
         fun build(): RAG {
             val splitter = textSplitter ?: throw IllegalStateException("TextSplitter must be provided")
             val database = db ?: throw IllegalStateException("VectorDatabase must be provided")
-            val provider = embeddingProvider ?: throw IllegalStateException("EmbeddingProvider must be provided")
-            
+            val provider =
+                embeddingProvider ?: throw IllegalStateException("EmbeddingProvider must be provided")
+
             return RAG(context, splitter, database, provider)
         }
     }
-    
+
     companion object {
         /**
          * 创建新的RAG构建器
@@ -90,4 +91,4 @@ class RAG private constructor(
             return Builder(context)
         }
     }
-} 
+}

@@ -3,7 +3,6 @@ package me.rerere.rikkahub.data.db.entity
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import me.rerere.ai.core.TokenUsage
 
 @Entity
 data class ConversationEntity(
@@ -13,12 +12,16 @@ data class ConversationEntity(
     val assistantId: String,
     @ColumnInfo("title")
     val title: String,
-    @ColumnInfo("messages")
-    val messages: String,
-    @ColumnInfo("usage")
-    val tokenUsage: TokenUsage?,
+    @ColumnInfo("nodes")
+    val nodes: String,
     @ColumnInfo("create_at")
     val createAt: Long,
     @ColumnInfo("update_at")
     val updateAt: Long,
+    @ColumnInfo("truncate_index", defaultValue = "-1")
+    val truncateIndex: Int,
+    @ColumnInfo("suggestions", defaultValue = "[]")
+    val chatSuggestions: String,
+    @ColumnInfo("is_pinned", defaultValue = "0")
+    val isPinned: Boolean,
 )

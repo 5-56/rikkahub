@@ -25,4 +25,4 @@ class TextFileExtractor : DataExtractor<File> {
             emptyList()
         }
     }
-} 
+}

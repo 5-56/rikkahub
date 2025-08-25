@@ -39,10 +39,12 @@ android {
     }
     tasks.withType<KotlinCompile>().configureEach {
         compilerOptions.optIn.add("kotlin.uuid.ExperimentalUuidApi")
+        compilerOptions.optIn.add("kotlin.time.ExperimentalTime")
     }
 }
 
 dependencies {
+    implementation(project(":common"))
     implementation(project(":search"))
 
     implementation(libs.androidx.core.ktx)

@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.BottomAppBarDefaults
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -24,6 +25,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
@@ -54,9 +56,8 @@ import com.dokar.sonner.ToastType
 import kotlinx.coroutines.launch
 import me.rerere.ai.provider.ModelType
 import me.rerere.rikkahub.R
-import me.rerere.rikkahub.ui.components.chat.ModelSelector
+import me.rerere.rikkahub.ui.components.ai.ModelSelector
 import me.rerere.rikkahub.ui.components.nav.BackButton
-import me.rerere.rikkahub.ui.components.ui.WavyLinearProgressIndicator
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.utils.getText
 import org.koin.androidx.compose.koinViewModel
@@ -95,13 +96,9 @@ fun TranslatorPage(vm: TranslatorVM = koinViewModel()) {
                         onSelect = {
                             vm.updateSettings(settings.copy(translateModeId = it.id))
                         },
-                        onUpdate = {
-                            vm.updateSettings(settings.copy(
-                                providers = it
-                            ))
-                        },
                         providers = settings.providers,
-                        type = ModelType.CHAT
+                        type = ModelType.CHAT,
+                        onlyIcon = true,
                     )
                 }
             )
@@ -163,7 +160,7 @@ fun TranslatorPage(vm: TranslatorVM = koinViewModel()) {
             // 翻译进度条
             Crossfade(translating) { isTranslating ->
                 if (isTranslating) {
-                    WavyLinearProgressIndicator(
+                    LinearWavyProgressIndicator(
                         modifier = Modifier
                             .padding(8.dp)
                             .fillMaxWidth()
@@ -228,6 +225,21 @@ private fun LanguageSelector(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
+    @Composable
+    fun getLanguageDisplayName(locale: Locale): String {
+        return when (locale) {
+            Locale.SIMPLIFIED_CHINESE -> stringResource(R.string.language_simplified_chinese)
+            Locale.ENGLISH -> stringResource(R.string.language_english)
+            Locale.TRADITIONAL_CHINESE -> stringResource(R.string.language_traditional_chinese)
+            Locale.JAPANESE -> stringResource(R.string.language_japanese)
+            Locale.KOREAN -> stringResource(R.string.language_korean)
+            Locale.FRENCH -> stringResource(R.string.language_french)
+            Locale.GERMAN -> stringResource(R.string.language_german)
+            Locale.ITALIAN -> stringResource(R.string.language_italian)
+            else -> locale.getDisplayLanguage(Locale.getDefault())
+        }
+    }
+
     Box(
         modifier = Modifier.padding(horizontal = 4.dp)
     ) {
@@ -236,12 +248,12 @@ private fun LanguageSelector(
             onExpandedChange = { expanded = it }
         ) {
             OutlinedTextField(
-                value = targetLanguage.displayName,
+                value = getLanguageDisplayName(targetLanguage),
                 onValueChange = {},
                 readOnly = true,
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 modifier = Modifier
-                    .menuAnchor(MenuAnchorType.PrimaryEditable)
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable)
                     .fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color.Transparent,
@@ -256,7 +268,7 @@ private fun LanguageSelector(
             ) {
                 Locales.forEach { language ->
                     DropdownMenuItem(
-                        text = { Text(language.displayName) },
+                        text = { Text(getLanguageDisplayName(language)) },
                         onClick = {
                             onLanguageSelected(language)
                             expanded = false

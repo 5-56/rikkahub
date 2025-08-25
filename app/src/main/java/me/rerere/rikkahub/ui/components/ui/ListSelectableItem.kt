@@ -14,7 +14,7 @@ fun ListSelectableItem(
     key: Any,
     selectedKeys: List<Any>,
     onSelectChange: (Any) -> Unit,
-    modifier: Modifier  = Modifier,
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
@@ -22,7 +22,7 @@ fun ListSelectableItem(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        if(enabled) {
+        if (enabled) {
             Checkbox(
                 checked = key in selectedKeys,
                 onCheckedChange = {

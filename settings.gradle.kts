@@ -23,8 +23,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        mavenLocal()
         maven("https://jitpack.io")
+        maven("https://androidx.dev/snapshots/builds/13617490/artifacts/repository")
+        mavenLocal()
     }
 }
 
@@ -34,4 +35,5 @@ include(":highlight")
 include(":ai")
 include(":search")
 include(":rag")
-include(":mcp")
+include(":tts")
+include(":common")

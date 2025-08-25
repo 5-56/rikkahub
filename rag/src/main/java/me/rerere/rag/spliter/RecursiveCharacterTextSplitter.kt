@@ -49,16 +49,16 @@ class RecursiveCharacterTextSplitter(
         }
 
         var currentChunk = StringBuilder()
-        
+
         for (segment in segments) {
             val segmentWithSeparator = if (segment.isEmpty()) "" else segment + separator
-            
+
             // 如果添加这个段会导致超出块大小
             if (currentChunk.length + segmentWithSeparator.length > chunkSize) {
                 if (currentChunk.isNotEmpty()) {
                     chunks.add(currentChunk.toString())
                 }
-                
+
                 // 如果单个段太长，递归分割
                 if (segmentWithSeparator.length > chunkSize) {
                     chunks.addAll(splitText(segmentWithSeparator, level + 1))
@@ -84,7 +84,7 @@ class RecursiveCharacterTextSplitter(
         for (i in 0 until text.length step (chunkSize - chunkOverlap)) {
             val chunkEnd = minOf(i + chunkSize, text.length)
             chunks.add(text.substring(i, chunkEnd))
-            
+
             if (chunkEnd == text.length) {
                 break
             }
@@ -103,17 +103,18 @@ class RecursiveCharacterTextSplitter(
         for (i in 1 until chunks.size) {
             val prevChunk = result.last()
             val currentChunk = chunks[i]
-            
+
             // 计算重叠部分
             val overlapStart = maxOf(0, prevChunk.length - chunkOverlap)
             val prevChunkEnd = prevChunk.substring(overlapStart)
-            
+
             // 查找重叠
             val overlapIndex = currentChunk.indexOf(prevChunkEnd)
-            
+
             if (overlapIndex != -1) {
                 // 有重叠部分，合并
-                result[result.size - 1] = prevChunk + currentChunk.substring(prevChunkEnd.length + overlapIndex)
+                result[result.size - 1] =
+                    prevChunk + currentChunk.substring(prevChunkEnd.length + overlapIndex)
             } else {
                 // 没有找到精确重叠，直接添加
                 result.add(currentChunk)
@@ -130,4 +131,4 @@ class RecursiveCharacterTextSplitter(
             "separators" to separators
         )
     }
-} 
+}
